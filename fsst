@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running basic tests with it"""
 import os
 import sys
@@ -672,12 +672,13 @@ async def argparse_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
     parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
-    parser.add_argument("--port", help="FlureeDB port. (default 8090)", default="8090")
+    parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
     parser.add_argument("--createkey", help="FlureeDB signing key for creation")
     parser.add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
     parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
     parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
     parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
+    parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
     args = parser.parse_args()
     notest = args.notest
     network = args.network
@@ -685,6 +686,14 @@ async def argparse_main():
     port = int(args.port)
     output = args.output
     createkey = args.createkey
+    if args.pipeline:
+        while not createkey:
+            try:
+                with open("./default-private-key.txt") as keyfile:
+                    createkey = keyfile.read()
+            except:
+                print("# waiting for default-private-key.txt to appear")
+            await asyncio.sleep(3)
     createid = None
     target = args.target
     if not target:
