@@ -7,8 +7,6 @@ The tool has three main uses:
 2) Deploy a FlureeDB schema compiled from multiple sources.
 3) Run unit-tests on the different components of the FlureeDB schema.
 
-The first version of the tool is just the python script *fsst*. In the near future, a Dockerfile will be added to make integration of the tool in CICD pipelines more convenient.
-
 ### Dependencies
 
 Prior to using the *fsst* tool, use *pip install* to install all dependencies.
@@ -189,6 +187,54 @@ It is important to note that *fsst* doesn't create *_auth* records for the keys 
       "roles": [["_role/id","root"]]
     }
   ]
+```
+
+## Running with docker
+
+When used in a CICD pipeline, or when only used to test, if you have no further interest in the intermediate databases, running fsst in a docker container is likely the prefered way to run it.
+
+To build the fsst docker container, run:
+
+```bash
+docker build -t fsst .
+```
+
+Then, to run the tests in for ecample the demo-schema-parts directory, run:
+
+```bash
+./docker_test.sh demo-schema-parts
+```
+
+The result of this command will look something like this:
+
+```
+# waiting for default-private-key.txt to appear
+# waiting for default-private-key.txt to appear
+BUILDING default
+- Database: test8290/there-can-be-only-one
+ - collecting transactions from build subdirs
+  - roles
+  - there_can_be_only_one
+ - processing schema transaction sub-set
+ - ok, completed 4 transactions on test8290/there-can-be-only-one
+ - running test scenarios
+  - SCENARIO: test1
+   - prepare.json
+      - Ran 2  database  transactions
+   - yes.json
+      - Ran 0  database  queries
+   - no.json
+      - Ran 0  database  queries
+   - tyes.json
+      - Ran 1  database  transactions
+   - tno.json
+         - NOTICE: Expected error in NO transaction
+                  : 400 db/invalid-tx HeadOfState is already assigned to an Auth Value: 123145302311912
+      - Ran 1  database  transactions
+   - clean
+      - file not found, skipping: clean
+      - Ran 0  database  transactions
+ - 1 tests completed
 ```
 
 

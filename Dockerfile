@@ -26,5 +26,5 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-CMD ["python3"]
+CMD ["/usr/src/fsst/fsst_tests.sh"]
 
