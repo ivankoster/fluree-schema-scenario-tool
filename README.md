@@ -196,8 +196,14 @@ When used in a CICD pipeline, or when only used to test, if you have no further 
 To build the fsst docker containers, run:
 
 ```bash
-docker build -t fsst:stable .
-docker build -t fsst:beta . -f Dockerfile-latest
+docker build -t pibara/fsst:stable .
+docker build -t pibara/fsst:beta . -f Dockerfile-latest
+```
+Alternatively fetch the image(s) from docker hub:
+
+```bash
+docker pull pibara/fsst:stable
+docker pull pibara/fsst:beta`
 ```
 
 Then, to run the tests in for example the demo-schema-parts directory, run:
@@ -237,5 +243,3 @@ BUILDING default
       - Ran 0  database  transactions
  - 1 tests completed
 ```
-
-
