@@ -1,7 +1,7 @@
 FROM python:3.9-slim-buster
 WORKDIR /usr/src/fsst
 # Download stable version FlureeDB as a zip file
-ADD https://fluree-releases-public.s3.amazonaws.com/fluree-stable.zip /usr/src/
+ADD https://fluree-releases-public.s3.amazonaws.com/fluree-latest.zip /usr/src/
 COPY fsst_tests.sh /usr/src/fsst/fsst_tests.sh
 COPY fsst /usr/src/fsst/fsst
 RUN apt-get update && \ 
@@ -23,8 +23,8 @@ RUN apt-get update && \
     python3 -m pip install aioflureedb && \
     # Unzip the fluree zip file and remove the zip.
     cd  /usr/src && \    
-    unzip fluree-stable.zip && \
-    rm fluree-stable.zip && \
+    unzip fluree-latest.zip && \
+    rm fluree-latest.zip && \
     mv fluree-*/* fsst/ && \
     rmdir fluree-* && \
     # Remove stuff we no longer need.

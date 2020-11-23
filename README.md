@@ -193,13 +193,14 @@ It is important to note that *fsst* doesn't create *_auth* records for the keys 
 
 When used in a CICD pipeline, or when only used to test, if you have no further interest in the intermediate databases, running fsst in a docker container is likely the prefered way to run it.
 
-To build the fsst docker container, run:
+To build the fsst docker containers, run:
 
 ```bash
-docker build -t fsst .
+docker build -t fsst:stable .
+docker build -t fsst:beta . -f Dockerfile-latest
 ```
 
-Then, to run the tests in for ecample the demo-schema-parts directory, run:
+Then, to run the tests in for example the demo-schema-parts directory, run:
 
 ```bash
 ./docker_test.sh demo-schema-parts
