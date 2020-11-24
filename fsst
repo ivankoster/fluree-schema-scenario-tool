@@ -778,7 +778,8 @@ async def argparse_main():
                 print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
                 sys.exit(1)
     if not pipeline and args.docker:
-        webbrowser.open("http://localhost:8090/")
+        if args.notest:
+            webbrowser.open("http://localhost:8090/")
         await fluree_docker(args.notest, target, fluree_parts, args.tag)
     else:
         await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts)
