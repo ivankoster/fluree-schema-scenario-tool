@@ -10,13 +10,13 @@ import time
 import hashlib
 import asyncio
 import itertools
-crypto_ok = True
+CRYPTO_OK = True
 try:
     import base58
     import aioflureedb
     import bitcoinlib
-except:
-    crypto_ok = False
+except ModuleNotFoundError:
+    CRYPTO_OK = False
 
 def key_to_id(privkey):
     """Convert a private key string into a fluree account id.
@@ -246,7 +246,7 @@ async def do_transaction(database, rdatabase, transaction, succeed):
     RuntimeError
         If a transaction or query fails where it wasn't expected to or succeeds when it was expected to fail.
     """
-    # pylint: disable=too-many-branches,too-complex
+    # pylint: disable=too-many-branches
     try:
         try:
             # Transact without waiting for the result, we'll loop for that later
@@ -398,7 +398,8 @@ async def process_fluree_testfile(database, subdir, fluree_parts, fdb, transacti
     succeed: bool
         Boolean indicating if the transactions/queries in the file ar expected to succeed.
     keys: list,str,None
-        List of key objects or a single key object containing the signing key and key id for running the transactions or queries with.
+        List of key objects or a single key object containing the signing key and key id for running
+        the transactions or queries with.
     query: bool
         Boolean indicating the file contains queries instead of transactions.
 
@@ -430,7 +431,8 @@ async def process_fluree_testfile(database, subdir, fluree_parts, fdb, transacti
             if key is None:
                 # Strip transactions of any "COMMENT" fields.
                 transaction = strip_comments_list(transaction)
-                # If the key is None, this is probably the prepare or the cleanup file, run the transaction using the priviledged signing key
+                # If the key is None, this is probably the prepare or the cleanup file, run the transaction using the
+                #  priviledged signing key
                 await do_transaction(database, database, transaction, succeed)
             else:
                 # Use the non-priv signing key for most operations
@@ -443,7 +445,8 @@ async def process_fluree_testfile(database, subdir, fluree_parts, fdb, transacti
                     else:
                         # Strip transactions of any "COMMENT" fields.
                         transaction = strip_comments_list(transaction)
-                        # Run the transaction using the priviledged signing key, use the priv signing key for transaction probing.
+                        # Run the transaction using the priviledged signing key, use the priv signing key for
+                        #  transaction probing.
                         await do_transaction(database2, database, transaction, succeed)
 
         print("      - Ran", len(transactions), " database ", ("transactions", "queries")[query])
@@ -511,7 +514,8 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
     # Run all yes queries, these should succeed with non empty results.
     await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "yes.json", keys=yeskeys, query=True)
     # Run all no queries, these should fail with empty results.
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "no.json", succeed=False, keys=nokeys, query=True)
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "no.json", succeed=False, keys=nokeys,
+                                  query=True)
     # Run all yes transactions, these should succeed without exceptions
     await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "tyes.json", keys=tyeskeys)
     # Run all no transactions, these should fail with exceptions from aioflureedb
@@ -578,6 +582,7 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
             print(" -", len(testscenarios), "tests completed")
 
 async def fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts):
+    # pylint: disable=too-many-branches, too-many-statements
     """The tools main function
 
     Parameters
@@ -616,6 +621,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                 sys.exit(2)
         maxstage = 0
         # Outer loop for finding out where and how far to run the inner loop.
+        # pylint: disable=too-many-nested-blocks
         for subdir in build:
             if output or notest:
                 # If output or notest, we dont run any tests, we just fill the expanded list with expanded transactions.
@@ -657,7 +663,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                             for entry in mainlist:
                                 expanded2.append(expand_transaction(entry, subdir2, fluree_parts))
                     # Run all test scenarios for this stage
-                    await smartfunction_test(host, port, database, createkey, createid, build[maxstage], expanded2, fluree_parts)
+                    await smartfunction_test(host, port, database, createkey, createid, build[maxstage], expanded2,
+                                             fluree_parts)
             maxstage += 1
         if output:
             # Write the expanded transaction list for all stages combined to a single artifact.
@@ -684,7 +691,7 @@ async def fluree_docker(notest, target, builddir, imagetag):
     """
     hostdir = os.getenv("PWD") + "/" + builddir
     image = "pibara/fsst:" + imagetag
-    command = ["docker","run"]
+    command = ["docker", "run"]
     if notest:
         command.append("-p")
         command.append("8090:8080")
@@ -700,14 +707,17 @@ async def fluree_docker(notest, target, builddir, imagetag):
     if notest:
         command.append("--notest")
     print(" ".join(command))
+    # TODO: may want to look into this one!
+    # pylint: disable=subprocess-run-check
     return subprocess.run(command)
 
 
 async def argparse_main():
+    # pylint: disable=too-many-branches, too-many-statements
     """An argparse only main function invoking the real main"""
     netname = "test" + str(int(time.time()/10) % 100000)
     parser = argparse.ArgumentParser()
-    if crypto_ok:
+    if CRYPTO_OK:
         parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
         parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
         parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
@@ -718,9 +728,10 @@ async def argparse_main():
     parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
     parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
     parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
-    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.", default="stable")
+    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
+                        default="stable")
     args = parser.parse_args()
-    if crypto_ok:
+    if CRYPTO_OK:
         network = args.network
         host = args.host
         port = int(args.port)
@@ -729,24 +740,24 @@ async def argparse_main():
         pipeline = args.pipeline
     else:
         network = netname
-        host="localhost"
-        port=8080
+        host = "localhost"
+        port = 8080
         output = None
-        createkey=None
+        createkey = None
         pipeline = False
     command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
-    if args.pipeline:
+    if pipeline:
         print(" ".join(command))
         if not args.notest:
-            pid = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            pid = subprocess.Popen(command)
+            subprocess.Popen(command)
         # os.spawnl(os.P_NOWAIT, *command)
         while not createkey:
             try:
                 with open("./default-private-key.txt") as keyfile:
                     createkey = keyfile.read()
-            except:
+            except FileNotFoundError:
                 print("# waiting for default-private-key.txt to appear")
             await asyncio.sleep(6)
     createid = None
@@ -756,6 +767,9 @@ async def argparse_main():
     fluree_parts = args.dir
     if not fluree_parts:
         fluree_parts = "fluree_parts"
+    if not args.docker and not CRYPTO_OK:
+        print("ERROR:, no --docker specified and missing crypto libs for non-docker run")
+        sys.exit(1)
     if not output:
         if createkey:
             createid = key_to_id(createkey)
@@ -763,11 +777,11 @@ async def argparse_main():
             if not args.docker:
                 print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
                 sys.exit(1)
-    if not args.pipeline and args.docker:
-        fluree_process = await fluree_docker(args.notest, target, fluree_parts, args.tag)
+    if not pipeline and args.docker:
+        await fluree_docker(args.notest, target, fluree_parts, args.tag)
     else:
         await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts)
-    if args.pipeline:
+    if pipeline:
         if args.notest:
             print("Opening browser")
             webbrowser.open_new_tab("http://localhost:8090/")
