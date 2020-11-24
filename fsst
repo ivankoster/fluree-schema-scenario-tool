@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running basic tests with it"""
 import os
+from subprocess import Popen
 import sys
 import argparse
 import json
@@ -666,6 +667,37 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
         print(str(exp))
         sys.exit(1)
 
+async def fluree_docker(notest, target, builddir, imagetag):
+    """Forward arguments into a docker run of the tool
+
+    notest: boolean
+        Boolean indicating not to run tests, but to still deploy compiled transactions to db
+    target:
+        The build target name to use.
+    fluree_parts: string
+        Fluree build sources top dir directory path
+    """
+    hostdir = os.getenv("PWD") + "/" + builddir
+    image = "pibara/fsst:" + imagetag
+    command = ["docker","run"]
+    if notest:
+        command.append("-p")
+        command.append("8090:8080")
+    for part in ["--mount",
+                 'src=' + hostdir + ',target=/usr/src/fsst/fluree_parts,type=bind',
+                 "-it",
+                 image,
+                 "/usr/src/fsst/fsst",
+                 "--pipeline",
+                 "--target",
+                 target]:
+        command.append(part)
+    if notest:
+        command.append("--notest")
+    print(" ".join(command))
+    return Popen(command)
+
+
 async def argparse_main():
     """An argparse only main function invoking the real main"""
     netname = "test" + str(int(time.time()/10) % 100000)
@@ -679,6 +711,8 @@ async def argparse_main():
     parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
     parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
     parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
+    parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
+    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.", default="stable")
     args = parser.parse_args()
     notest = args.notest
     network = args.network
@@ -686,7 +720,15 @@ async def argparse_main():
     port = int(args.port)
     output = args.output
     createkey = args.createkey
+    docker = args.docker
+    pipeline = args.pipeline
+    command = ["/bin/bash", "bash", "/usr/src/fsst/fluree_start.sh"]
     if args.pipeline:
+        if not notest:
+            command.append(">")
+            command.append("/dev/null")
+        pid = subprocess.Popen(command, creationflags=subprocess.DETACHED_PROCESS).pid
+        # os.spawnl(os.P_NOWAIT, *command)
         while not createkey:
             try:
                 with open("./default-private-key.txt") as keyfile:
@@ -705,10 +747,19 @@ async def argparse_main():
         if createkey:
             createid = key_to_id(createkey)
         if not (createkey  and createid):
-            print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
-            sys.exit(1)
-    await fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts)
-
+            if not docker:
+                print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
+                sys.exit(1)
+    if not pipeline and docker:
+        fluree_process = await fluree_docker(notest, target, fluree_parts, args.tag)
+    else:
+        await fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts)
+    if args.pipeline:
+        if notest:
+            print("Not exitting in --pipeline --notest mode")
+            while True:
+                asyncio.sleep(30)
+                print('.', end='', flush=True)
 
 LOOP = asyncio.get_event_loop()
 LOOP.run_until_complete(argparse_main())
