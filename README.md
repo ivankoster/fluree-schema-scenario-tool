@@ -6,10 +6,13 @@ The tool has three main uses:
 1) Compile a FlureeDB schema from multiple sources.
 2) Deploy a FlureeDB schema compiled from multiple sources.
 3) Run unit-tests on the different components of the FlureeDB schema.
+4) To load the compiled schema into a temporary docker container in order to test some queries or transactions in the FlureeDB WUI.
+
 
 ### Dependencies
 
 Prior to using the *fsst* tool, use *pip install* to install all dependencies.
+Note that these dependencies should not be needed if you only intent to use the unit-test (using docker) or the docker temp instance of Fluree.
 
 ```bash
 python3 -m pip install base58 aioflureedb bitcoinlib
@@ -189,27 +192,14 @@ It is important to note that *fsst* doesn't create *_auth* records for the keys 
   ]
 ```
 
-## Running with docker
+### Running tests with docker
 
 When used in a CICD pipeline, or when only used to test, if you have no further interest in the intermediate databases, running fsst in a docker container is likely the prefered way to run it.
 
-To build the fsst docker containers, run:
+To run the test in a docker setting without installing FlureeDB on your development PC, run:
 
 ```bash
-docker build -t pibara/fsst:stable .
-docker build -t pibara/fsst:beta . -f Dockerfile-latest
-```
-Alternatively fetch the image(s) from docker hub:
-
-```bash
-docker pull pibara/fsst:stable
-docker pull pibara/fsst:beta`
-```
-
-Then, to run the tests in for example the demo-schema-parts directory, run:
-
-```bash
-./docker_test.sh demo-schema-parts
+./fsst --dir demo-schema-parts --docker --tag 0.1.15.7
 ```
 
 The result of this command will look something like this:
@@ -243,3 +233,12 @@ BUILDING default
       - Ran 0  database  transactions
  - 1 tests completed
 ```
+
+### Running a temp Fluree database in docker with the composite schema
+
+```bash
+./fsst --dir demo-schema-parts --docker --notest --tag 0.1.15.7
+```
+When you run fsst like this, the docker image won't be used to run any tests, but instead the FlureeDB will be initialized with the composite schema and a browser tab will get opened with the FlureeDB WUI.
+
+ 

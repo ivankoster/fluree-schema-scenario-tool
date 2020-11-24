@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running basic tests with it"""
 import os
-from subprocess import Popen
+import subprocess
+import webbrowser
 import sys
 import argparse
 import json
@@ -9,9 +10,13 @@ import time
 import hashlib
 import asyncio
 import itertools
-import base58
-import aioflureedb
-import bitcoinlib
+crypto_ok = True
+try:
+    import base58
+    import aioflureedb
+    import bitcoinlib
+except:
+    crypto_ok = False
 
 def key_to_id(privkey):
     """Convert a private key string into a fluree account id.
@@ -695,39 +700,47 @@ async def fluree_docker(notest, target, builddir, imagetag):
     if notest:
         command.append("--notest")
     print(" ".join(command))
-    return Popen(command)
+    return subprocess.run(command)
 
 
 async def argparse_main():
     """An argparse only main function invoking the real main"""
     netname = "test" + str(int(time.time()/10) % 100000)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
-    parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
-    parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
-    parser.add_argument("--createkey", help="FlureeDB signing key for creation")
+    if crypto_ok:
+        parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
+        parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
+        parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
+        parser.add_argument("--createkey", help="FlureeDB signing key for creation")
+        parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
+        parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
     parser.add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
-    parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
     parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
     parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
-    parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
     parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
     parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.", default="stable")
     args = parser.parse_args()
-    notest = args.notest
-    network = args.network
-    host = args.host
-    port = int(args.port)
-    output = args.output
-    createkey = args.createkey
-    docker = args.docker
-    pipeline = args.pipeline
-    command = ["/bin/bash", "bash", "/usr/src/fsst/fluree_start.sh"]
+    if crypto_ok:
+        network = args.network
+        host = args.host
+        port = int(args.port)
+        output = args.output
+        createkey = args.createkey
+        pipeline = args.pipeline
+    else:
+        network = netname
+        host="localhost"
+        port=8080
+        output = None
+        createkey=None
+        pipeline = False
+    command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
     if args.pipeline:
-        if not notest:
-            command.append(">")
-            command.append("/dev/null")
-        pid = subprocess.Popen(command, creationflags=subprocess.DETACHED_PROCESS).pid
+        print(" ".join(command))
+        if not args.notest:
+            pid = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            pid = subprocess.Popen(command)
         # os.spawnl(os.P_NOWAIT, *command)
         while not createkey:
             try:
@@ -735,7 +748,7 @@ async def argparse_main():
                     createkey = keyfile.read()
             except:
                 print("# waiting for default-private-key.txt to appear")
-            await asyncio.sleep(3)
+            await asyncio.sleep(6)
     createid = None
     target = args.target
     if not target:
@@ -747,18 +760,19 @@ async def argparse_main():
         if createkey:
             createid = key_to_id(createkey)
         if not (createkey  and createid):
-            if not docker:
+            if not args.docker:
                 print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
                 sys.exit(1)
-    if not pipeline and docker:
-        fluree_process = await fluree_docker(notest, target, fluree_parts, args.tag)
+    if not args.pipeline and args.docker:
+        fluree_process = await fluree_docker(args.notest, target, fluree_parts, args.tag)
     else:
-        await fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts)
+        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts)
     if args.pipeline:
-        if notest:
-            print("Not exitting in --pipeline --notest mode")
+        if args.notest:
+            print("Opening browser")
+            webbrowser.open_new_tab("http://localhost:8090/")
             while True:
-                asyncio.sleep(30)
+                await asyncio.sleep(30)
                 print('.', end='', flush=True)
 
 LOOP = asyncio.get_event_loop()
