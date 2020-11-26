@@ -1,0 +1,36 @@
+{
+  "default": [
+    "roles",
+    "user"
+  ],
+  "user_ok": [
+    "roles",
+    "user",
+    "user_with_ok_role"
+  ],
+  "user_not_ok": [
+    "roles",
+    "user",
+    "user_with_not_ok_role"
+  ],
+  "user_both": [
+    "roles",
+    "user",
+    "user_with_both_roles"
+  ],
+  "auth_ok": [
+    "roles",
+    "user",
+    "auth_with_ok_role"
+  ],
+  "auth_not_ok": [
+    "roles",
+    "user",
+    "auth_with_not_ok_role"
+  ],
+  "auth_both": [
+    "roles",
+    "user",
+    "auth_with_both_roles"
+  ]
+}

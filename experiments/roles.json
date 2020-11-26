@@ -1,0 +1,34 @@
+[
+  [
+    {
+      "_id": "_rule$Query_auth",
+      "id": "Query_auth",
+      "doc": "Can query _auth.",
+      "collection": "_auth",
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "ok_role",
+      "rules": ["_rule$Query_auth"]
+    }
+  ],
+  [
+    {
+      "_id": "_rule$No_Query_auth",
+      "id": "No_Query_auth",
+      "doc": "Can't query _auth.",
+      "collection": "_auth",
+      "collectionDefault": true,
+      "fns": [["_fn/name", "false"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "not_ok_role",
+      "rules": ["_rule$No_Query_auth"]
+    }
+  ]
+]

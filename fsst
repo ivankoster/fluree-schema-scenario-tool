@@ -679,7 +679,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
         print(str(exp))
         sys.exit(1)
 
-async def fluree_docker(notest, target, builddir, imagetag):
+async def fluree_docker(notest, target, builddir, imagetag, verbosefluree):
     """Forward arguments into a docker run of the tool
 
     notest: boolean
@@ -688,6 +688,8 @@ async def fluree_docker(notest, target, builddir, imagetag):
         The build target name to use.
     fluree_parts: string
         Fluree build sources top dir directory path
+    verbosefluree: boolean
+        Don't send flureedb output to /dev/null
     """
     hostdir = os.getenv("PWD") + "/" + builddir
     image = "pibara/fsst:" + imagetag
@@ -706,6 +708,8 @@ async def fluree_docker(notest, target, builddir, imagetag):
         command.append(part)
     if notest:
         command.append("--notest")
+    if verbosefluree:
+        command.append("--verbosefluree")
     print(" ".join(command))
     # TODO: may want to look into this one!
     # pylint: disable=subprocess-run-check
@@ -730,6 +734,7 @@ async def argparse_main():
     parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
     parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
                         default="stable")
+    parser.add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
     args = parser.parse_args()
     if CRYPTO_OK:
         network = args.network
@@ -748,7 +753,7 @@ async def argparse_main():
     command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
     if pipeline:
         print(" ".join(command))
-        if not args.notest:
+        if not args.notest and not args.verbosefluree:
             subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             subprocess.Popen(command)
@@ -780,7 +785,7 @@ async def argparse_main():
     if not pipeline and args.docker:
         if args.notest:
             webbrowser.open("http://localhost:8090/")
-        await fluree_docker(args.notest, target, fluree_parts, args.tag)
+        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree)
     else:
         await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts)
     if pipeline:
