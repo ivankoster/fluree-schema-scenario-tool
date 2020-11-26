@@ -84,8 +84,7 @@ def query_to_clojure(obj, params):
     # Interleave the escaped JSON parts and the parameters and put them in a (str ) clojure expression
     rval = " ".join(list(itertools.chain(*zip(["(query (str "] + params, escaped_parts))) + [") )"])
     return rval
-
-def expand_operation(operation, subdir, fluree_parts):
+def expand_operation(operation, subdir, fluree_parts, verboseerrors):
     """Expand any "code_expand" or "code+from_query" in a single operation within a transaction
 
     Parameters
@@ -96,7 +95,8 @@ def expand_operation(operation, subdir, fluree_parts):
         Component directory name
     fluree_parts: str
         Fluree build sources top dir directory path
-
+    verboseerrors: boolean
+        Add extra errpr message to rules that don't define them
     Returns
     -------
     str
@@ -104,6 +104,10 @@ def expand_operation(operation, subdir, fluree_parts):
     """
     # If the operation has a "params" field, use it, otherwise use empty list.
     params = []
+    if (verboseerrors and "_id" in operation and "id" in operation 
+            and operation["_id"].startswith("_rule") 
+            and "errorMessage" not in operation):
+        operation["errorMessage"] = "Verbose Errors: " + operation[""]
     if "params" in operation:
         params = operation["params"]
     if "code_expand" in operation:
@@ -127,7 +131,7 @@ def expand_operation(operation, subdir, fluree_parts):
         del operation["code_from_query"]
     return operation
 
-def expand_transaction(transaction, subdir, fluree_parts):
+def expand_transaction(transaction, subdir, fluree_parts, verboseerrors):
     """Expand any "code_expand" or "code+from_query" in a transaction
 
     Parameters
@@ -138,6 +142,8 @@ def expand_transaction(transaction, subdir, fluree_parts):
         Component directory name
     fluree_parts: str
         Fluree build sources top dir directory path
+    verboseerrors: boolean
+        Add extra error messages to rules that don't define them.
 
     Returns
     -------
@@ -146,7 +152,7 @@ def expand_transaction(transaction, subdir, fluree_parts):
     """
     rval = list()
     for operation in transaction:
-        rval.append(expand_operation(operation, subdir, fluree_parts))
+        rval.append(expand_operation(operation, subdir, fluree_parts, verboseerrors))
     return rval
 
 async def filldb(host, port, dbase, key, keyid, transactions):
@@ -581,7 +587,7 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
                 await run_test_scenario(database, subdir, fluree_parts, fdb, scenario)
             print(" -", len(testscenarios), "tests completed")
 
-async def fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts):
+async def fluree_main(notest, network, host, port, output, createkey, createid, target, fluree_parts, verboseerrors):
     # pylint: disable=too-many-branches, too-many-statements
     """The tools main function
 
@@ -605,6 +611,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
         The build target name to use.
     fluree_parts: string
         Fluree build sources top dir directory path
+    verboseerrors: boolean
+        Add extra error strings to rules if undefined.
     """
     # pylint: disable=too-many-locals,too-many-arguments
     try:
@@ -630,13 +638,20 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                 if os.path.isfile(noexpand):
                     with open(noexpand) as nefile:
                         nelist = json.load(nefile)
-                    for entry in nelist:
-                        expanded.append(entry)
+                    for transaction in nelist:
+                        out_transaction = list()
+                        for operation in transaction:
+                            if (verboseerrors and "_id" in operation and "id" in operation
+                                    and operation["_id"].startswith("_rule")
+                                    and "errorMessage" not in operation):
+                                operation["errorMessage"] = "Verbose Errors: " + operation["id"]
+                            out_transaction.append(operation)
+                        expanded.append(out_transaction)
                 else:
                     with open(main) as mainfile:
                         mainlist = json.load(mainfile)
                     for entry in mainlist:
-                        expanded.append(expand_transaction(entry, subdir, fluree_parts))
+                        expanded.append(expand_transaction(entry, subdir, fluree_parts, verboseerrors))
             else:
                 # Otherwise, if notest is false and the stage has a test.json, we run our inner loop for testing
                 testfile = fluree_parts + "/" + subdir + "/test.json"
@@ -655,13 +670,17 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                         if os.path.isfile(noexpand):
                             with open(noexpand) as nefile:
                                 nelist = json.load(nefile)
-                            for entry in nelist:
-                                expanded2.append(entry)
+                            for operation in nelist:
+                                if (verboseerrors and "_id" in operation and "id" in operation
+                                        and operation["_id"].startswith("_rule")
+                                        and "errorMessage" not in operation):
+                                    operation["errorMessage"] = "Verbose Errors: " + operation[""]
+                                expanded2.append(operation)
                         else:
                             with open(main) as mainfile:
                                 mainlist = json.load(mainfile)
                             for entry in mainlist:
-                                expanded2.append(expand_transaction(entry, subdir2, fluree_parts))
+                                expanded2.append(expand_transaction(entry, subdir2, fluree_parts, verboseerrors))
                     # Run all test scenarios for this stage
                     await smartfunction_test(host, port, database, createkey, createid, build[maxstage], expanded2,
                                              fluree_parts)
@@ -679,7 +698,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
         print(str(exp))
         sys.exit(1)
 
-async def fluree_docker(notest, target, builddir, imagetag, verbosefluree):
+async def fluree_docker(notest, target, builddir, imagetag, verbosefluree, verboseerrors):
     """Forward arguments into a docker run of the tool
 
     notest: boolean
@@ -710,6 +729,8 @@ async def fluree_docker(notest, target, builddir, imagetag, verbosefluree):
         command.append("--notest")
     if verbosefluree:
         command.append("--verbosefluree")
+    if verboseerrors:
+        command.append("--verboseerrors")
     print(" ".join(command))
     # TODO: may want to look into this one!
     # pylint: disable=subprocess-run-check
@@ -735,6 +756,7 @@ async def argparse_main():
     parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
                         default="stable")
     parser.add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
+    parser.add_argument('--verboseerrors', action='store_true', help="add verbose errors to rules without an error defined.")
     args = parser.parse_args()
     if CRYPTO_OK:
         network = args.network
@@ -785,9 +807,9 @@ async def argparse_main():
     if not pipeline and args.docker:
         if args.notest:
             webbrowser.open("http://localhost:8090/")
-        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree)
+        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree, args.verboseerrors)
     else:
-        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts)
+        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts, args.verboseerrors)
     if pipeline:
         if args.notest:
             while True:
