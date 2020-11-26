@@ -719,7 +719,7 @@ async def fluree_docker(notest, target, builddir, imagetag, verbosefluree, verbo
     verbosefluree: boolean
         Don't send flureedb output to /dev/null
     """
-    hostdir = os.getenv("PWD") + "/" + builddir
+    hostdir = os.getcwd() + "/" + builddir
     image = "pibara/fsst:" + imagetag
     command = ["docker", "run"]
     if notest:
