@@ -5,13 +5,14 @@
       "id": "Query_auth",
       "doc": "Can query _auth.",
       "collection": "_auth",
-      "collectionDefault": true,
+      "collectionDefault": false,
+      "predicates" : ["_auth/id","_auth/doc"],
       "fns": [["_fn/name", "true"]],
       "ops": ["query"]
     },
     {
       "_id": "_role",
-      "id": "ok_role",
+      "id": "ok_auth",
       "rules": ["_rule$Query_auth"]
     }
   ],
@@ -27,8 +28,26 @@
     },
     {
       "_id": "_role",
-      "id": "not_ok_role",
+      "id": "not_ok_auth",
       "rules": ["_rule$No_Query_auth"]
+    }
+  ],
+  [
+ 
+
+    {
+      "_id": "_rule$No_Query_auth_doc",
+      "id": "No_Query_auth_doc",
+      "doc": "Can't query _auth/doc",
+      "collection": "_auth",
+      "predicates" : ["_auth/doc"],
+      "fns": [["_fn/name", "false"]],
+      "ops": ["all"]
+    },
+    {
+      "_id": "_role",
+      "id": "not_ok_auth_doc",
+      "rules": ["_rule$No_Query_auth_doc"]
     }
   ]
 ]

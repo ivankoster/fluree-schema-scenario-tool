@@ -6,31 +6,46 @@
   "user_ok": [
     "roles",
     "user",
-    "user_with_ok_role"
+    "user_ok_collection"
   ],
   "user_not_ok": [
     "roles",
     "user",
-    "user_with_not_ok_role"
+    "user_not_ok_collection"
   ],
   "user_both": [
     "roles",
-    "user",
-    "user_with_both_roles"
+    "user",    
+    "user_both_roles_collection"
   ],
   "auth_ok": [
     "roles",
     "user",
-    "auth_with_ok_role"
+    "auth_ok_collection"
   ],
   "auth_not_ok": [
     "roles",
     "user",
-    "auth_with_not_ok_role"
+    "auth_not_ok_collection"
   ],
   "auth_both": [
     "roles",
     "user",
-    "auth_with_both_roles"
+    "auth_both_roles_collection"
+  ],
+  "auth_ok_pred": [
+    "roles",
+    "user",
+    "auth_ok_collection_pred"
+  ],
+  "auth_not_ok_pred": [
+    "roles",
+    "user",
+    "auth_not_ok_collection_pred"
+  ],
+  "auth_both_pred": [
+    "roles",
+    "user",
+    "auth_both_collection_pred"
   ]
 }

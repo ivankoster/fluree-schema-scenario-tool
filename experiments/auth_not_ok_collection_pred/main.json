@@ -3,7 +3,7 @@
     {
       "_id": ["_auth/id", "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6"],
       "roles": [
-	      ["_role/id", "not_ok_role"]
+	      ["_role/id", "not_ok_auth_doc"]
       ]
     }
   ]

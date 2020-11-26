@@ -3,7 +3,8 @@
     {
       "_id": ["_user/username", "test_user"],
       "roles": [
-	      ["_role/id", "not_ok_role"]
+	      ["_role/id", "ok_auth"],
+	      ["_role/id", "not_ok_auth"]
       ]
     }
   ]
