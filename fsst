@@ -367,12 +367,21 @@ async def do_query(database, query, succeed):
     """
     # Exceptions in queries are never OK, query should return empty results on failure.
     try:
-        response = await database.flureeql.query.raw(query)
+        response0 = await database.flureeql.query.raw(query)
     except aioflureedb.FlureeException as exp:
         print("Exception while processing query")
         print(json.dumps(query, indent=4, sort_keys=True))
         print()
         raise exp
+    # Strip all _id only values  from the response
+    response = list()
+    for obj in response0:
+        if "_id" in obj:
+            del obj["_id"]
+        if obj:
+            response.append(obj)
+    if response0 and not response:
+        print("        - NOTE: Non-empty response treated as functionally empty (only _id fields)")
     # On success we expect a non-empty result
     if succeed and len(response) == 0:
         print("Empty response on YES query")

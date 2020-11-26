@@ -1,6 +1,6 @@
 [
   {
-     "select": ["_id"],
+     "select": ["*"],
      "from": "_auth"
   }
 ]
