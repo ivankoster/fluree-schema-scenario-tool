@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+import argparse
+import time
+import asyncio
+import sys
+
+async def argparse_main():
+    netname = "test" + str(int(time.time()/10) % 100000)
+    parsers = dict()
+    parsers["main"] = argparse.ArgumentParser()
+    subparsers = parsers["main"].add_subparsers()
+    helps = {
+       "artifact": "From a build target, create a single JSON artifact file with all transactions",
+       "test": "Run tests for build target using a running FlureeDB",
+       "dockertest": "Run tests for build target on a to be spawned docker containing FlureeDB",
+       "deploy": "Deploy a build target to a running FlureeDB",
+       "dockerdeploy": "Start a docker container, deploy build target, and keep container running"
+    }
+    for subcommand in ["artifact", "test","deploy", "dockertest","dockerdeploy"]:
+        parsers[subcommand] = subparsers.add_parser(subcommand,help=helps[subcommand])
+        parsers[subcommand].add_argument('--pipeline', action='store_true', help=argparse.SUPPRESS)
+        parsers[subcommand].add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
+        parsers[subcommand].add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
+        parsers[subcommand].add_argument('--verboseerrors', action='store_true', help="add verbose errors to rules without an error defined.")
+        if subcommand in ["test","deploy"]:
+            parsers[subcommand].add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
+        else:
+            parsers[subcommand].add_argument("--host", help=argparse.SUPPRESS, default="localhost")
+        if subcommand == "artifact":
+            parsers[subcommand].add_argument("output", help="Output JSON file. (other options ignored when used)")
+            parsers[subcommand].add_argument("--port", help=argparse.SUPPRESS, default=None)
+        else:
+            parsers[subcommand].add_argument("--output", help=argparse.SUPPRESS, default=None)
+            if subcommand in ["test","deploy"]:
+                parsers[subcommand].add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
+            else:
+                parsers[subcommand].add_argument("--port", help=argparse.SUPPRESS, default="8090")
+        if subcommand in ["test","deploy","dockertest","dockerdeploy"]:
+            parsers[subcommand].add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
+        else:
+            parsers[subcommand].add_argument("--network", help=argparse.SUPPRESS, default=netname)
+        if subcommand in ["test","deploy"]:
+            parsers[subcommand].add_argument("--createkey", help="FlureeDB signing key for creation")
+            parsers[subcommand].add_argument('--dockerfind', action='store_true',
+                    help="Use docker commands to extract createkey from running fsst docker")
+        else:
+            parsers[subcommand].add_argument("--createkey", help=argparse.SUPPRESS)
+            parsers[subcommand].add_argument('--dockerfind', action='store_true', help=argparse.SUPPRESS)
+        if subcommand in ["deploy", "dockerdeploy"]:
+            parsers[subcommand].add_argument("--notest", help=argparse.SUPPRESS, default=True)            
+        else:
+            parsers[subcommand].add_argument("--notest", help=argparse.SUPPRESS, default=False)
+        if subcommand in ["dockertest","dockerdeploy"]: 
+            parsers[subcommand].add_argument("--docker", help=argparse.SUPPRESS, default=True)
+            parsers[subcommand].add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
+                        default="stable")
+            parsers[subcommand].add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
+        else:
+            parsers[subcommand].add_argument("--docker", help=argparse.SUPPRESS, default=False)
+            parsers[subcommand].add_argument('--tag', help=argparse.SUPPRESS, default=None)
+            parsers[subcommand].add_argument('--verbosefluree', default=False, help=argparse.SUPPRESS)
+        if subcommand == "dockertest":
+            parsers[subcommand].add_argument('--linger', action='store_true', help="Keep docker/FlureeDB running after tests have completed")
+            parsers[subcommand].add_argument('--daemonize', default=False, help=argparse.SUPPRESS)
+        elif subcommand == "dockerdeploy":
+            parsers[subcommand].add_argument('--linger', default=True, help=argparse.SUPPRESS)
+            parsers[subcommand].add_argument('--daemonize', action='store_true', help="Keep docker/FlureeDB running after tests have completed")
+        else:
+            parsers[subcommand].add_argument('--linger', default=False, help=argparse.SUPPRESS)
+            parsers[subcommand].add_argument('--daemonize', default=False, help=argparse.SUPPRESS)
+    args = parsers["main"].parse_args()
+    if not vars(args):
+        print("Please supply commandline agruments. Use --help for info")
+        sys.exit(1)
+    argdict = vars(args)
+    command = ["./fsst"]
+    for arg in argdict.keys():
+        val = argdict[arg]
+        if isinstance(val,bool):
+            if val:
+                command.append("--" + arg)
+        elif not val is None:
+            command.append("--" + arg)
+            command.append(val)
+    print(" ".join(command))
+LOOP = asyncio.get_event_loop()
+LOOP.run_until_complete(argparse_main())
