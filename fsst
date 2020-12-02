@@ -11,12 +11,33 @@ import hashlib
 import asyncio
 import itertools
 CRYPTO_OK = True
+DOCKER_OK = True
 try:
     import base58
+except ModuleNotFoundError:
+    print("WARNING: - base58 python lib not found.")
+    CRYPTO_OK = False
+try:
     import aioflureedb
+except ModuleNotFoundError:
+    print("WARNING: - aioflureedb python lib not found.")
+    CRYPTO_OK = False
+try:
     import bitcoinlib
 except ModuleNotFoundError:
+    print("WARNING: - bitcoinlib python lib not found.")
     CRYPTO_OK = False
+if not CRYPTO_OK:
+    print("         - testing commands disabled.")
+try:
+    import docker
+except ModuleNotFoundError:
+    if CRYPTO_OK:
+        print("WARNING: - docker python lib not found.")
+    else:
+        print("         - docker python lib not found.")
+    print("         - docker related commands disabled.")
+    DOCKER_OK = False
 
 def key_to_id(privkey):
     """Convert a private key string into a fluree account id.
@@ -625,7 +646,6 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
     """
     # pylint: disable=too-many-locals,too-many-arguments
     try:
-        print("BUILDING", target)
         expanded = list()
         # Build.json contains the different build targets and lists their components.
         # Fetch the specified target from this file.
@@ -639,6 +659,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
         maxstage = 0
         # Outer loop for finding out where and how far to run the inner loop.
         # pylint: disable=too-many-nested-blocks
+        testcount = 0
         for subdir in build:
             if output or notest:
                 # If output or notest, we dont run any tests, we just fill the expanded list with expanded transactions.
@@ -665,6 +686,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                 # Otherwise, if notest is false and the stage has a test.json, we run our inner loop for testing
                 testfile = fluree_parts + "/" + subdir + "/test.json"
                 if os.path.isfile(testfile) and not notest:
+                    testcount += 1
                     # Make up a database name for our test, using network and stage name.
                     database = network + "/" + subdir
                     database = "-".join(database.lower().split("_"))
@@ -702,6 +724,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
             # If no output but notest specified, fill the database with the expanded tranactions list.
             database = network + "/" + target
             await filldb(host, port, database, createkey, createid, expanded)
+        elif testcount == 0:
+            print("WARNING: build target has no tests defined")
     except (RuntimeError, aioflureedb.FlureeException) as exp:
         # For a more friendly fail
         print(str(exp))
@@ -745,85 +769,459 @@ async def fluree_docker(notest, target, builddir, imagetag, verbosefluree, verbo
     # pylint: disable=subprocess-run-check
     return subprocess.run(command)
 
+async def artifact_main(output, directory, target, verbose_errors):
+    await fluree_main(notest=False,
+                      network=None,
+                      host=None,
+                      port=None,
+                      output = output,
+                      createkey=None,
+                      createid=None,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verbose_errors)
+    return
 
-async def argparse_main():
-    # pylint: disable=too-many-branches, too-many-statements
-    """An argparse only main function invoking the real main"""
-    netname = "test" + str(int(time.time()/10) % 100000)
-    parser = argparse.ArgumentParser()
-    if CRYPTO_OK:
-        parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
-        parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
-        parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
-        parser.add_argument("--createkey", help="FlureeDB signing key for creation")
-        parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
-        parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
-    parser.add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
-    parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
-    parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
-    parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
-    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
-                        default="stable")
-    parser.add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
-    parser.add_argument('--verboseerrors', action='store_true', help="add verbose errors to rules without an error defined.")
-    args = parser.parse_args()
-    if CRYPTO_OK:
-        network = args.network
-        host = args.host
-        port = int(args.port)
-        output = args.output
-        createkey = args.createkey
-        pipeline = args.pipeline
-    else:
-        network = netname
-        host = "localhost"
-        port = 8080
-        output = None
-        createkey = None
-        pipeline = False
-    command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
-    if pipeline:
-        print(" ".join(command))
-        if not args.notest and not args.verbosefluree:
+async def test_main(directory, target, verboseerrors, host, port, network, createkey, createid):
+    await fluree_main(notest=False,
+                      network=network,
+                      host=host,
+                      port=port,
+                      output = None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verboseerrors)
+    return
+
+async def deploy_main(directory, target, verboseerrors, host, port, network, createkey):
+    print("FIXME: deploy_main")
+    return
+
+async def dockertest_main(directory, target, verboseerrors, network, tag, verbosefluree, linger):
+    cmd = "./fsst guesttest --target " + target + " --network " + network
+    if verboseerrors:
+        cmd += " --verboseerrors"
+    if verbosefluree:
+        cmd += " --verbosefluree"
+    if linger:
+        cmd += " --linger"
+    return run_in_docker(tag, cmd, directory, False, linger)
+
+async def dockerdeploy_main(directory, target, verboseerrors, network, tag, verbosefluree, daemonize):
+    cmd = "./fsst guesdeploy --target " + target + " --network " + network
+    if verboseerrors:
+        cmd += " --verboseerrors"
+    if verbosefluree:
+        cmd += " --verbosefluree"
+    return run_in_docker(tag, cmd, directory, daemonize, True)
+
+async def guesttest_main(tag, target, verboseerrors, network, linger, createkey, createid):
+    await fluree_main(notest=False,
+                      network=network,
+                      host="localhost",
+                      port=8080,
+                      output = None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts="fluree_parts",
+                      verboseerrors=verboseerrors)
+    if linger:
+        print("LINGER == True")
+        count=0
+        while True:
+            await asyncio.sleep(30)
+            count += 1
+            print('LINGER', count,  flush=True)
+    return
+
+async def artifactdeploy_main(inputfile, db, host, port, createkey, keyid):
+    try:
+        with open(inputfile) as artifactfile:
+            artifactdata = artifactfile.read()
+        artifact = json.loads(artifactdata)
+    except FileNotFoundError:
+        print("ERROR: couldn't open file:", inputfile)
+        sys.exit(1)
+    except json.decoder.JSONDecodeError:
+        print("ERROR: Not a JSON file:", inputfile)
+        sys.exit(1)
+    if not isinstance(artifact,list):
+        print("ERROR: Artifact file should contain a JSON array:",inputfile)
+        sys.exit(1)
+    for transaction in artifact:
+        if not isinstance(transaction,list):
+            print("ERROR: Artifact file should contain a JSON array of arrays:",inputfile)
+            sys.exit(1)
+        for operation in transaction:
+            if not isinstance(operation,dict):
+                print("ERROR: Artifact file should contain a JSON array of arrays of dicts:",inputfile)
+                sys.exit(1)
+    async with  aioflureedb.FlureeClient(masterkey=createkey, auth_address=keyid, host=host, port=port) as flureeclient:
+        await flureeclient.health.ready()
+        # Create the new database for our tests
+        await flureeclient.new_db(db_id=db)
+        fdb = await flureeclient[db]
+        # Database context
+        async with fdb(createkey, keyid) as database:
+            await database.ready()
+            for transaction in artifact:
+                try:
+                    await database.command.transaction(transaction)
+                except aioflureedb.FlureeException as exp:
+                    print("Exception while processing artifact transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                    print()
+                    sys.exit(1)
+    return
+
+async def dockerparams_main(tag):
+    client = docker.from_env()
+    container = get_running_docker(client,tag)
+    if container == None:
+        print("ERROR, running container not found for tag =",tag)
+        return
+    echo = container.exec_run("cat default-private-key.txt")
+    createkey=None
+    port = None
+    if echo.exit_code == 0:
+        createkey = echo.output.decode()
+    if ("HostConfig" in container.attrs and 
+        "PortBindings" in container.attrs["HostConfig"] and 
+        "8080/tcp" in container.attrs["HostConfig"]["PortBindings"] and
+        container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]
+    ):
+        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
+            if "HostPort" in binding:
+                port = int(binding["HostPort"])
+    print("CREATEKEY:", createkey)
+    print("PORT:", port)
+
+async def guestdeploy_main(tag, target, verboseerrors, network, verbosefluree):
+    print("FIXME: guestdeploy_main")
+    return
+
+def get_running_docker(client,tag):
+    name = "pibara/fsst:" + tag
+    for container in client.containers.list():
+        for ttag in  container.image.attrs["RepoTags"]:
+            if ttag == name:
+                return container
+    return None
+
+def get_container_info(client, container):
+    hostport = None
+    createkey = None
+    if ("HostConfig" in container.attrs and
+      "PortBindings" in container.attrs["HostConfig"] and
+      "8080/tcp" in container.attrs["HostConfig"]["PortBindings"]):
+        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
+            if "HostPort" in binding:
+                hostport = binding["HostPort"]
+    command_result = container.exec_run("cat default-private-key.txt")
+    if command_result.exit_code == 0:
+        createkey = command_result.output.decode()
+    return hostport, createkey
+
+def run_in_docker(tag, command, directory, daemonize, expose):
+    print("COMMAND:", command)
+    match = None
+    lookfor = "pibara/fsst:" + tag
+    print("IMAGE:", lookfor)
+    client = docker.from_env()
+    for image in client.images.list():
+        for repotag in image.attrs["RepoTags"]:
+            if repotag == lookfor:
+                match = image
+    if match == None:
+        print("ERROR: ", lookfor,"docker image not found")
+        sys.exit(0)
+    workdir = os.path.join(os.getcwd(), directory)
+    mount = docker.types.Mount("/usr/src/fsst/fluree_parts", workdir, read_only=True, type="bind")
+    ports = dict()
+    if expose or daemonize:
+        ports["8080/tcp"] = 8090
+    # runcmd = client.containers.run(match, command, mounts = [mount], ports=ports, stream=True, tty=True, detach=daemonize)
+    container = client.containers.run(match, command, mounts = [mount], ports=ports, detach=True)
+    if not daemonize:
+        try:
+            browser_triggered = False
+            runcmd = container.logs(stream=True, follow=True)
+            for line in runcmd:
+                sline = line.decode().replace("\r","").replace("\n","")
+                print(sline,flush=True)
+                if sline == "LINGER == True" and browser_triggered == False:
+                    webbrowser.open("http://localhost:8090/")
+
+        except KeyboardInterrupt:
+            print("Stopping container")
+            container.stop()
+            print("Container stopped after keyboard interrupt")
+    return
+
+def get_from_docker(tag):
+    client = docker.from_env()
+    container = get_running_docker(client, tag)
+    if not container:
+        print("ERROR: Running docker with tag",tag,"not found")
+        sys.exit(1)
+    hostport, createkey = get_container_info(client, container)
+    return hostport, createkey
+
+async def get_createkey_and_port(createkey, keyfile, dockerfind, tag, port, startfluree, verbosefluree):
+    if startfluree and keyfile:
+        rval = None
+        command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
+        if not verbosefluree:
             subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             subprocess.Popen(command)
-        # os.spawnl(os.P_NOWAIT, *command)
-        while not createkey:
+        times = 0
+        while not rval:
             try:
                 with open("./default-private-key.txt") as keyfile:
-                    createkey = keyfile.read()
+                    rval = keyfile.read()
             except FileNotFoundError:
                 print("# waiting for default-private-key.txt to appear")
             await asyncio.sleep(6)
-    createid = None
-    target = args.target
-    if not target:
-        target = "default"
-    fluree_parts = args.dir
-    if not fluree_parts:
-        fluree_parts = "fluree_parts"
-    if not args.docker and not CRYPTO_OK:
-        print("ERROR:, no --docker specified and missing crypto libs for non-docker run")
-        sys.exit(1)
-    if not output:
-        if createkey:
-            createid = key_to_id(createkey)
-        if not (createkey  and createid):
-            if not args.docker:
-                print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
+            times += 1
+            if times > 40:
+                print("ERROR: Taking too long for default-private-key.txt to apear in docker container after starting FlureeDB")
                 sys.exit(1)
-    if not pipeline and args.docker:
-        if args.notest:
-            webbrowser.open("http://localhost:8090/")
-        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree, args.verboseerrors)
+        return rval, port, key_to_id(rval)
+    if createkey:
+        return createkey, port, key_to_id(createkey)
+    if keyfile:
+        with open(keyfile) as kfil:
+            createkey = kfil.read().replace("\r","").replace("\n","")
+            return createkey, port, key_to_id(createkey)
+    if dockerfind:
+        hostport, createkey = get_from_docker(dockerfind)
+        return createkey, hostport, key_to_id(createkey)
+    print("ERROR: No way specfied to find default signing key for FlureeDB")
+    print("       Use one of the following command line options:")
+    print("")
+    print("         --createkey")
+    print("         --keyfile")
+    print("         --dockerfind")
+    sys.exit(1)
+
+def runs_in_docker():
+    try:
+        with open("/proc/1/cgroup") as cgrp:
+            # Read the cgroup file if on Linux
+            cgrplines = cgrp.read().split("\n")[:-1]
+            # Count the occurences of "/", should only be one or two when in docker.
+            cnt = [line.split(":")[2] for line in cgrplines].count("/")
+        if cnt < 3:
+            return True
+    except:
+        print("/proc/1/cgroup not found, assuming no trunning inside of docker.")
+    return False
+
+async def argparse_main():
+    netname = "test" + str(int(time.time()/10) % 100000)
+    parsers = dict()
+    parsers["main"] = argparse.ArgumentParser()
+    subparsers = parsers["main"].add_subparsers()
+    helps = {
+       "artifact": "From a build target, create a single JSON artifact file with all transactions",
+       "test": "Run tests for build target using a running FlureeDB",
+       "dockertest": "Run tests for build target on a to be spawned docker containing FlureeDB",
+       "deploy": "Deploy a build target to a running FlureeDB",
+       "dockerdeploy": "Start a docker container, deploy build target, and keep container running",
+       "guesttest": "DON'T USE, INTERNAL USE ONLY", 
+       "guestdeploy": "DON'T USE, INTERNAL USE ONLY",
+       "dockerparams": "Fetch createkey and port from RUNNING fsst docker container",
+       "artifactdeploy": "Deploy an artifact that was created with 'fsst artifact' earlier",
+       "dir": "Directory containing build tree (default fluree_parts)",
+       "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
+       "verboseerrors": "Add verbose errors to rules without an error defined.",
+       "host": "FlureeDB host. (default localhost)",
+       "port": "FlureeDB port. (default 8080)",
+       "network": "FlureeDB network name. (generate if unspecified)",
+       "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
+       "keyfile": "File containing FlureeDB signing key for creation (alternative for --createkey or --dockerfind)",
+       "dockerfind": "Extract FlureeDB signing key for creation from running docker (alternative for --createkey or --keyfile)",
+       "linger": "Keep docker/FlureeDB running after tests have completed",
+       "tag": "Tag to use for fsst docker image.",
+       "verbosefluree": "Dont redirect flureedb stdout/stderr to /dev/null",
+       "daemonize": "Run docker/FlureeDB docker as a daemon process",
+       "output": "Output JSON file",
+       "input": "Input JSON file",
+       "db": "Name for the new database to deploy to."
+    }
+    defaults = {
+        "dir" : "fluree_parts",
+        "target" : "default",
+        "verboseerrors": False,
+        "host" : "localhost",
+        "port" : "8080",
+        "network" : netname,
+        "createkey" : None,
+        "keyfile" : None,
+        "dockerfind" : None,
+        "linger": False,
+        "tag": "beta",
+        "verbosefluree": False,
+        "daemonize": False
+    }
+    argsmap = {
+        "artifact": {"output","dir","target","verboseerrors"},    
+        "test": {"dir","target","verboseerrors","host","port","network","createkey","keyfile","dockerfind"},
+        "deploy": {"dir","target","verboseerrors","host","port","network","createkey","keyfile","dockerfind"},
+        "dockertest": {"dir","target","verboseerrors","network","linger","tag","verbosefluree"},
+        "dockerdeploy": {"db","dir","target","verboseerrors","tag","daemonize"},
+        "dockerparams": {"tag"},
+        "artifactdeploy": {"input:db","host","port","createkey","keyfile","dockerfind"},
+        "guesttest": {"target","verboseerrors","network","keyfile","linger","verbosefluree"},
+        "guestdeploy": {"db", "target","verboseerrors","keyfile","linger","verbosefluree"}
+    }
+    if CRYPTO_OK:
+        if DOCKER_OK:
+            if runs_in_docker():
+                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy", "guesttest", "guestdeploy"]
+            else:
+                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy","dockerparams","artifactdeploy"]
+        else:
+            if runs_in_docker():
+                subcommands = ["artifact", "test","deploy","guesttest", "guestdeploy"]
+            else:
+                subcommands = ["artifact", "test","deploy"]
     else:
-        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts, args.verboseerrors)
-    if pipeline:
-        if args.notest:
-            while True:
-                await asyncio.sleep(30)
-                print('.', end='', flush=True)
+        subcommands = ["artifact"]
+    for subcommand in subcommands:
+        sc_help = helps[subcommand]
+        sc_args = argsmap[subcommand] 
+        parsers[subcommand] = subparsers.add_parser(subcommand,help=sc_help)
+        parsers[subcommand].add_argument('--subcommand', help=argparse.SUPPRESS, default=subcommand)
+        todo = {"dir","target","verboseerrors","host","port","network","createkey","keyfile","dockerfind","linger","tag","verbosefluree","output","input","db","daemonize"}
+        for sc_arg in sc_args:
+            for subarg in sc_arg.split(":"):
+                sa_help = helps[subarg]
+                if subarg in defaults:
+                   sa_default = defaults[subarg]
+                   if sa_default == False:
+                       parsers[subcommand].add_argument('--' + subarg, action='store_true', help=sa_help)    
+                   else:
+                       parsers[subcommand].add_argument("--" + subarg, help=sa_help, default=sa_default)
+                else:
+                   parsers[subcommand].add_argument(subarg, help=sa_help)
+                todo.remove(subarg)
+        for subarg in todo:
+            parsers[subcommand].add_argument('--' + subarg, help=argparse.SUPPRESS, default=None)
+    args = parsers["main"].parse_args()
+    if not vars(args):
+        print("Please supply commandline agruments. Use --help for info")
+        sys.exit(1)
+    if args.subcommand == "artifact":
+        return await artifact_main(args.output, args.dir, args.target, args.verboseerrors)
+    createkey = args.createkey
+    port = args.port
+    if args.subcommand in ["test", "deploy", "guesttest", "guestdeploy","artifactdeploy"]:
+        if args.subcommand in ["guesttest", "guestdeploy"]:
+            startfluree = True
+        else:
+            startfluree = False
+        createkey, port, createid = await get_createkey_and_port(args.createkey, args.keyfile, args.dockerfind, args.tag, args.port, startfluree, args.verbosefluree)
+    if args.subcommand == "test":
+        return await test_main(args.dir, args.target, args.verboseerrors, args.host, port, args.network, createkey, createid)
+    if args.subcommand == "deploy":
+        return await deploy_main(args.dir, args.target, args.verboseerrors, args.host, port, args.network, createkey)
+    if args.subcommand == "dockertest":
+        return await dockertest_main(args.dir, args.target, args.verboseerrors, args.network, args.tag, args.verbosefluree, args.linger)
+    if args.subcommand == "dockerdeploy":
+        return await dockerdeploy_main(args.dir, args.target, args.verboseerrors, args.network, args.tag, args.verbosefluree, args.daemonize)
+    if args.subcommand == "guesttest":
+        return await guesttest_main(args.tag, args.target, args.verboseerrors, args.network, args.linger, createkey, createid)
+    if args.subcommand == "guestdeploy":
+        return await guestdeploy_main(args.tag, args.target, args.verboseerrors, args.network, args.verbosefluree)
+    if args.subcommand == "artifactdeploy":
+        return await artifactdeploy_main(args.input, args.db, args.host, port, createkey, createid)
+    if args.subcommand == "dockerparams":
+        return await dockerparams_main(args.tag)
+    print("ERROR: impossible subcommand:", args.subcommand)
+
+#async def argparse_main_old():
+#    # pylint: disable=too-many-branches, too-many-statements
+#    """An argparse only main function invoking the real main"""
+#    netname = "test" + str(int(time.time()/10) % 100000)
+#    parser = argparse.ArgumentParser()
+#    if CRYPTO_OK:
+#        parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
+#        parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
+#        parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
+#        parser.add_argument("--createkey", help="FlureeDB signing key for creation")
+#        parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
+#        parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
+#    parser.add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
+#    parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
+#    parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
+#    parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
+#    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
+#                        default="stable")
+#    parser.add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
+#    parser.add_argument('--verboseerrors', action='store_true', help="add verbose errors to rules without an error defined.")
+#    args = parser.parse_args()
+#    if CRYPTO_OK:
+#        network = args.network
+#        host = args.host
+#        port = int(args.port)
+#        output = args.output
+#        createkey = args.createkey
+#        pipeline = args.pipeline
+#    else:
+#        network = netname
+#        host = "localhost"
+#        port = 8080
+#        output = None
+#        createkey = None
+#        pipeline = False
+#    command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
+#    if pipeline:
+#        print(" ".join(command))
+#        if not args.notest and not args.verbosefluree:
+#            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+#        else:
+#            subprocess.Popen(command)
+#        # os.spawnl(os.P_NOWAIT, *command)
+#        while not createkey:
+#            try:
+#                with open("./default-private-key.txt") as keyfile:
+#                    createkey = keyfile.read()
+#            except FileNotFoundError:
+#                print("# waiting for default-private-key.txt to appear")
+#            await asyncio.sleep(6)
+#    createid = None
+#    target = args.target
+#    if not target:
+#        target = "default"
+#    fluree_parts = args.dir
+#    if not fluree_parts:
+#        fluree_parts = "fluree_parts"
+#    if not args.docker and not CRYPTO_OK:
+#        print("ERROR:, no --docker specified and missing crypto libs for non-docker run")
+#        sys.exit(1)
+#    if not output:
+#        if createkey:
+#            createid = key_to_id(createkey)
+#        if not (createkey  and createid):
+#            if not args.docker:
+#                print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
+#                sys.exit(1)
+#    if not pipeline and args.docker:
+#        if args.notest:
+#            webbrowser.open("http://localhost:8090/")
+#        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree, args.verboseerrors)
+#    else:
+#        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts, args.verboseerrors)
+#    if pipeline:
+#        if args.notest:
+#            while True:
+#                await asyncio.sleep(30)
+#                print('.', end='', flush=True)
 
 LOOP = asyncio.get_event_loop()
 LOOP.run_until_complete(argparse_main())

@@ -25,7 +25,6 @@ RUN apt-get update && \
     unzip fluree-latest.zip && \
     rm fluree-latest.zip && \
     mv fluree-*/* fsst/ && \
-    rmdir fluree-* && \
     # Remove stuff we no longer need.
     apt autoremove --yes && \
     apt-get clean && \
