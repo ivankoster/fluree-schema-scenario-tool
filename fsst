@@ -10,6 +10,7 @@ import time
 import hashlib
 import asyncio
 import itertools
+VERSION = "0.2.0"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -795,8 +796,17 @@ async def test_main(directory, target, verboseerrors, host, port, network, creat
                       verboseerrors=verboseerrors)
     return
 
-async def deploy_main(directory, target, verboseerrors, host, port, network, createkey):
-    print("FIXME: deploy_main")
+async def deploy_main(directory, target, verboseerrors, host, port, network, createkey, createid):
+    await fluree_main(notest=True,
+                      network=network,
+                      host=host,
+                      port=port,
+                      output = None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verboseerrors)
     return
 
 async def dockertest_main(directory, target, verboseerrors, network, tag, verbosefluree, linger):
@@ -809,8 +819,44 @@ async def dockertest_main(directory, target, verboseerrors, network, tag, verbos
         cmd += " --linger"
     return run_in_docker(tag, cmd, directory, False, linger)
 
-async def dockerdeploy_main(directory, target, verboseerrors, network, tag, verbosefluree, daemonize):
-    cmd = "./fsst guesdeploy --target " + target + " --network " + network
+async def versioncheck_main(tag):
+    match = None
+    lookfor = "pibara/fsst:" + tag
+    client = docker.from_env()
+    for image in client.images.list():
+        for repotag in image.attrs["RepoTags"]:
+            if repotag == lookfor:
+                match = image
+    if match == None:
+        print("ERROR: ", lookfor,"docker image not found")
+        sys.exit(0)
+    cmd = "./fsst version"
+    try:
+        container = client.containers.run(match, cmd, detach=False)
+    except docker.errors.ContainerError:
+        print("ERROR: Container Error.")
+        print("       This might be the result of a 0.1.x version of the docker container that didn't support --version yet")
+        sys.exit(1)
+    for line in container.decode().split("\n"):
+        parts = line.split(":")
+        if len(parts) == 2 and parts[0] == "FSST VERSION":
+            dockerfsst = parts[1].replace(" ","").split(".")
+    localfsst = VERSION.split(".")
+    if dockerfsst[0] == localfsst[0]:
+        if dockerfsst[1] == localfsst[1]:
+            if dockerfsst[2] == localfsst[2]:
+                print("Perfect version match:", VERSION)
+            else:
+                print("Near version match:", VERSION, "local vs", parts[1], "in docker image")
+        else:
+            print("Possible version mismatch:", VERSION, "local vs", parts[1], "in docker image")
+    else:
+        print("Version mismatch:", VERSION, "local vs", parts[1], "in docker image")
+    return
+
+
+async def dockerdeploy_main(directory, target, verboseerrors, db, tag, verbosefluree, daemonize):
+    cmd = "./fsst guestdeploy " + db + " --target " + target + " --linger --keyfile default-private-key.txt"
     if verboseerrors:
         cmd += " --verboseerrors"
     if verbosefluree:
@@ -899,9 +945,24 @@ async def dockerparams_main(tag):
     print("CREATEKEY:", createkey)
     print("PORT:", port)
 
-async def guestdeploy_main(tag, target, verboseerrors, network, verbosefluree):
-    print("FIXME: guestdeploy_main")
-    return
+async def guestdeploy_main(target, verboseerrors, db, createkey, createid):
+    await fluree_main(notest=True,
+                      network=None,
+                      host=None,
+                      port=None,
+                      output = "artifact.json",
+                      createkey=None,
+                      createid=None,
+                      target=target,
+                      fluree_parts="fluree_parts",
+                      verboseerrors=verboseerrors)
+    await artifactdeploy_main("artifact.json", db, "localhost", 8080, createkey, createid)
+    print("LINGER == True")
+    count=0
+    while True:
+        await asyncio.sleep(30)
+        count += 1
+        print('LINGER', count,  flush=True)
 
 def get_running_docker(client,tag):
     name = "pibara/fsst:" + tag
@@ -945,20 +1006,22 @@ def run_in_docker(tag, command, directory, daemonize, expose):
         ports["8080/tcp"] = 8090
     # runcmd = client.containers.run(match, command, mounts = [mount], ports=ports, stream=True, tty=True, detach=daemonize)
     container = client.containers.run(match, command, mounts = [mount], ports=ports, detach=True)
-    if not daemonize:
-        try:
-            browser_triggered = False
-            runcmd = container.logs(stream=True, follow=True)
-            for line in runcmd:
-                sline = line.decode().replace("\r","").replace("\n","")
+    try:
+        browser_triggered = False
+        runcmd = container.logs(stream=True, follow=True)
+        for line in runcmd:
+            sline = line.decode().replace("\r","").replace("\n","")
+            if not daemonize:
                 print(sline,flush=True)
-                if sline == "LINGER == True" and browser_triggered == False:
-                    webbrowser.open("http://localhost:8090/")
-
-        except KeyboardInterrupt:
-            print("Stopping container")
-            container.stop()
-            print("Container stopped after keyboard interrupt")
+            if sline == "LINGER == True" and browser_triggered == False:
+                webbrowser.open("http://localhost:8090/")
+                if daemonize:
+                    runcmd.close()
+                    break
+    except KeyboardInterrupt:
+        print("Stopping container")
+        container.stop()
+        print("Container stopped after keyboard interrupt")
     return
 
 def get_from_docker(tag):
@@ -1036,6 +1099,10 @@ async def argparse_main():
        "guestdeploy": "DON'T USE, INTERNAL USE ONLY",
        "dockerparams": "Fetch createkey and port from RUNNING fsst docker container",
        "artifactdeploy": "Deploy an artifact that was created with 'fsst artifact' earlier",
+       "versioncheck": "Validate that the version of fsst invoked and the one inside of the docker image match",
+       "version": "Get the version of the fsst tool",
+       "dockerstart": "Start a flureeDB only instance of the fsst docker image, available on localhost:8090",
+       "dockerstop": "Stop any running instance of the fsst docker image with the given tag",
        "dir": "Directory containing build tree (default fluree_parts)",
        "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
        "verboseerrors": "Add verbose errors to rules without an error defined.",
@@ -1077,19 +1144,23 @@ async def argparse_main():
         "dockerparams": {"tag"},
         "artifactdeploy": {"input:db","host","port","createkey","keyfile","dockerfind"},
         "guesttest": {"target","verboseerrors","network","keyfile","linger","verbosefluree"},
-        "guestdeploy": {"db", "target","verboseerrors","keyfile","linger","verbosefluree"}
+        "guestdeploy": {"db", "target","verboseerrors","keyfile","linger","verbosefluree"},
+        "versioncheck": {"tag"},
+        "dockerstart": {"tag"},
+        "dockerstop": {"tag"},
+        "version": {}
     }
     if CRYPTO_OK:
         if DOCKER_OK:
             if runs_in_docker():
-                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy", "guesttest", "guestdeploy"]
+                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy", "guesttest", "guestdeploy","version"]
             else:
-                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy","dockerparams","artifactdeploy"]
+                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy","dockerparams","artifactdeploy","version","versioncheck"]
         else:
             if runs_in_docker():
-                subcommands = ["artifact", "test","deploy","guesttest", "guestdeploy"]
+                subcommands = ["artifact", "test","deploy","guesttest", "guestdeploy","version"]
             else:
-                subcommands = ["artifact", "test","deploy"]
+                subcommands = ["artifact", "test","deploy","version"]
     else:
         subcommands = ["artifact"]
     for subcommand in subcommands:
@@ -1129,99 +1200,25 @@ async def argparse_main():
     if args.subcommand == "test":
         return await test_main(args.dir, args.target, args.verboseerrors, args.host, port, args.network, createkey, createid)
     if args.subcommand == "deploy":
-        return await deploy_main(args.dir, args.target, args.verboseerrors, args.host, port, args.network, createkey)
+        return await deploy_main(args.dir, args.target, args.verboseerrors, args.host, port, args.network, createkey, createid)
     if args.subcommand == "dockertest":
         return await dockertest_main(args.dir, args.target, args.verboseerrors, args.network, args.tag, args.verbosefluree, args.linger)
     if args.subcommand == "dockerdeploy":
-        return await dockerdeploy_main(args.dir, args.target, args.verboseerrors, args.network, args.tag, args.verbosefluree, args.daemonize)
+        return await dockerdeploy_main(args.dir, args.target, args.verboseerrors, args.db, args.tag, args.verbosefluree, args.daemonize)
     if args.subcommand == "guesttest":
         return await guesttest_main(args.tag, args.target, args.verboseerrors, args.network, args.linger, createkey, createid)
     if args.subcommand == "guestdeploy":
-        return await guestdeploy_main(args.tag, args.target, args.verboseerrors, args.network, args.verbosefluree)
+        return await guestdeploy_main(args.target, args.verboseerrors, args.db, createkey, createid)
     if args.subcommand == "artifactdeploy":
         return await artifactdeploy_main(args.input, args.db, args.host, port, createkey, createid)
     if args.subcommand == "dockerparams":
         return await dockerparams_main(args.tag)
+    if args.subcommand == "version":
+        print("FSST VERSION:", VERSION)
+        return
+    if args.subcommand == "versioncheck":
+        return await versioncheck_main(args.tag)
     print("ERROR: impossible subcommand:", args.subcommand)
-
-#async def argparse_main_old():
-#    # pylint: disable=too-many-branches, too-many-statements
-#    """An argparse only main function invoking the real main"""
-#    netname = "test" + str(int(time.time()/10) % 100000)
-#    parser = argparse.ArgumentParser()
-#    if CRYPTO_OK:
-#        parser.add_argument("--network", help="FlureeDB network name. (generate if unspecified)", default=netname)
-#        parser.add_argument("--host", help="FlureeDB host. (default localhost)", default="localhost")
-#        parser.add_argument("--port", help="FlureeDB port. (default 8080)", default="8080")
-#        parser.add_argument("--createkey", help="FlureeDB signing key for creation")
-#        parser.add_argument("--output", help="Output JSON file. (other options ignored when used)")
-#        parser.add_argument('--pipeline', action='store_true', help="When run from docker image, get createkey from file.")
-#    parser.add_argument("--target", help="FlureeDB, build target as defined in build.json ('default' if undefined)")
-#    parser.add_argument('--notest', action='store_true', help="Don't run tests, do deploy compiled transactions to db")
-#    parser.add_argument('--dir', help="Directory containing build tree (default fluree_parts)")
-#    parser.add_argument('--docker', action='store_true', help="Run the tests in a docker container.")
-#    parser.add_argument('--tag', help="Tag to use for fsst docker image. Only used in combination with --docker.",
-#                        default="stable")
-#    parser.add_argument('--verbosefluree', action='store_true', help="dont redirect flureedb stdout/stderr to /dev/null")
-#    parser.add_argument('--verboseerrors', action='store_true', help="add verbose errors to rules without an error defined.")
-#    args = parser.parse_args()
-#    if CRYPTO_OK:
-#        network = args.network
-#        host = args.host
-#        port = int(args.port)
-#        output = args.output
-#        createkey = args.createkey
-#        pipeline = args.pipeline
-#    else:
-#        network = netname
-#        host = "localhost"
-#        port = 8080
-#        output = None
-#        createkey = None
-#        pipeline = False
-#    command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
-#    if pipeline:
-#        print(" ".join(command))
-#        if not args.notest and not args.verbosefluree:
-#            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-#        else:
-#            subprocess.Popen(command)
-#        # os.spawnl(os.P_NOWAIT, *command)
-#        while not createkey:
-#            try:
-#                with open("./default-private-key.txt") as keyfile:
-#                    createkey = keyfile.read()
-#            except FileNotFoundError:
-#                print("# waiting for default-private-key.txt to appear")
-#            await asyncio.sleep(6)
-#    createid = None
-#    target = args.target
-#    if not target:
-#        target = "default"
-#    fluree_parts = args.dir
-#    if not fluree_parts:
-#        fluree_parts = "fluree_parts"
-#    if not args.docker and not CRYPTO_OK:
-#        print("ERROR:, no --docker specified and missing crypto libs for non-docker run")
-#        sys.exit(1)
-#    if not output:
-#        if createkey:
-#            createid = key_to_id(createkey)
-#        if not (createkey  and createid):
-#            if not args.docker:
-#                print("ERROR: At the very least, specify either a createkey or an output. See --help for more info")
-#                sys.exit(1)
-#    if not pipeline and args.docker:
-#        if args.notest:
-#            webbrowser.open("http://localhost:8090/")
-#        await fluree_docker(args.notest, target, fluree_parts, args.tag, args.verbosefluree, args.verboseerrors)
-#    else:
-#        await fluree_main(args.notest, network, host, port, output, createkey, createid, target, fluree_parts, args.verboseerrors)
-#    if pipeline:
-#        if args.notest:
-#            while True:
-#                await asyncio.sleep(30)
-#                print('.', end='', flush=True)
 
 LOOP = asyncio.get_event_loop()
 LOOP.run_until_complete(argparse_main())
