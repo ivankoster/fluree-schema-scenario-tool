@@ -129,7 +129,8 @@ def expand_operation(operation, subdir, fluree_parts, verboseerrors):
     if (verboseerrors and "_id" in operation and "id" in operation 
             and operation["_id"].startswith("_rule") 
             and "errorMessage" not in operation):
-        operation["errorMessage"] = "Verbose Errors: " + operation[""]
+        print("Adding verbose error for", operation["id"])
+        operation["errorMessage"] = "Verbose Errors: " + operation["id"]
     if "params" in operation:
         params = operation["params"]
     if "code_expand" in operation:
@@ -675,6 +676,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                             if (verboseerrors and "_id" in operation and "id" in operation
                                     and operation["_id"].startswith("_rule")
                                     and "errorMessage" not in operation):
+                                print("Adding verbose error for", operation["id"])
                                 operation["errorMessage"] = "Verbose Errors: " + operation["id"]
                             out_transaction.append(operation)
                         expanded.append(out_transaction)
@@ -706,6 +708,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                                 if (verboseerrors and "_id" in operation and "id" in operation
                                         and operation["_id"].startswith("_rule")
                                         and "errorMessage" not in operation):
+                                    print("Adding verbose error for", operation["id"])
                                     operation["errorMessage"] = "Verbose Errors: " + operation["id"]
                                 expanded2.append(operation)
                         else:
