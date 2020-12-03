@@ -35,6 +35,14 @@ python3 -m pip install base58 aioflureedb bitcoinlib docker
 
 It is important to note that as some dependencies are only needed for some subcommands, it is possible to run *fsst* without some of the dependencies installed, but doing so will disable several subcommands.
 
+If you plan to use the docker related sub commands, you should also fetch the relevant docker images from dockerhub. These are docker files containing both a version of FlureeDB and the latest version of the *fsst* tool. 
+
+```bash
+docker pull pibara/fsst:stable
+docker pull pibara/fsst:beta
+docker pull pibara/fsst:alpha
+```
+
 ### Project directory structure.
 
 The directory *demo-schema-parts* contains a sample project directory structure. 
