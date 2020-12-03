@@ -10,7 +10,7 @@ import time
 import hashlib
 import asyncio
 import itertools
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -832,7 +832,14 @@ async def dockerstart_main(tag):
     return
 
 async def dockerstop_main(tag):
-    print("NOT YET IMPLEMENTED")
+    match = None
+    lookfor = "pibara/fsst:" + tag
+    client = docker.from_env()
+    container = get_running_docker(client,tag)
+    if container:
+        container.stop()
+    else:
+        print("ERROR: no running instance of", lookfor,"found")
 
 async def versioncheck_main(tag):
     match = None
