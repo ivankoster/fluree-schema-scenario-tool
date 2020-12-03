@@ -1,7 +1,22 @@
-FROM python:3.9-slim-buster
+FROM clojure:tools-deps-1.10.1.727-slim-buster AS builder
+
+RUN apt-get update && \
+    apt-get upgrade --yes && \
+    apt-get install -y git zip && \
+    mkdir -p /usr/share/man/man1 && \
+    apt-get install -y maven
+
+RUN mkdir -p /usr/src/fluree-ledger
+WORKDIR /usr/src/fluree-ledger
+
+RUN git clone https://github.com/fluree/ledger.git .
+RUN clojure -A:test -Stree
+RUN make
+
+FROM python:3.9-slim-buster AS runner
 WORKDIR /usr/src/fsst
-# Download stable version FlureeDB as a zip file
-ADD https://fluree-releases-public.s3.amazonaws.com/fluree-latest.zip /usr/src/
+
+COPY --from=builder /usr/src/fluree-ledger/build/fluree-*.zip /usr/src/
 COPY fsst /usr/src/fsst/fsst
 RUN apt-get update && \
     apt-get upgrade --yes && \
@@ -22,12 +37,11 @@ RUN apt-get update && \
     python3 -m pip install aioflureedb && \
     # Unzip the fluree zip file and remove the zip.
     cd /usr/src && \
-    unzip fluree-latest.zip -d fsst/ && \
-    rm fluree-latest.zip && \
+    unzip fluree-*.zip -d fsst/ && \
+    rm fluree-*.zip && \
     # Remove stuff we no longer need.
     apt autoremove --yes && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 CMD ["/usr/src/fsst/fluree_start.sh"]
-
