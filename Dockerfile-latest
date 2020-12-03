@@ -3,7 +3,7 @@ WORKDIR /usr/src/fsst
 # Download stable version FlureeDB as a zip file
 ADD https://fluree-releases-public.s3.amazonaws.com/fluree-latest.zip /usr/src/
 COPY fsst /usr/src/fsst/fsst
-RUN apt-get update && \ 
+RUN apt-get update && \
     apt-get upgrade --yes && \
     apt-get --yes install apt-utils && \
     apt-get install --yes gcc && \
@@ -21,7 +21,7 @@ RUN apt-get update && \
     python3 -m pip install bitcoinlib && \
     python3 -m pip install aioflureedb && \
     # Unzip the fluree zip file and remove the zip.
-    cd  /usr/src && \    
+    cd /usr/src && \
     unzip fluree-latest.zip && \
     rm fluree-latest.zip && \
     mv fluree-*/* fsst/ && \
