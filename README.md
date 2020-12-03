@@ -13,7 +13,7 @@ The following sub-commands can run without docker, but need a FlureeDB server to
 
 * [artifactdeploy](doc/artifactdeploy.MD) : 
 * [deploy](doc/deploy.MD)
-* [test](doc/deploy.MD) 
+* [test](doc/test.MD) 
 
 If you have Docker installed, the following commands should also be available
 
