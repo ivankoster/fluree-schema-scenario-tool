@@ -1,17 +1,28 @@
-# WARNING
-
-The below README is still for the 0.1 version of *fsst*, there have been major changes to fsst in the 0.2 version commandline interface. An updated README will be available shortly.
-
 ## Fluree Schema Scenario Tool
 
 This project contains a simple yet usefull tool for database schema development for FlureeDB.
-The tool has three main uses:
+Note that there have been major updates to the commandline interface from the 0.1 version of this tool. Please upgrade both the tool and the accompanying [docker images](https://hub.docker.com/r/pibara/fsst/tags?page=1&ordering=last_updated) if you are currently using the 0.1 version.
 
-1) Compile a FlureeDB schema from multiple sources.
-2) Deploy a FlureeDB schema compiled from multiple sources.
-3) Run unit-tests on the different components of the FlureeDB schema.
-4) To load the compiled schema into a temporary docker container in order to test some queries or transactions in the FlureeDB WUI.
+From the 0.2 version of *fsst*, the command line has a number of sub commands. 
+The following sub-commands run without docker and without a local FlureeDB server.
 
+* [version](doc/version.MD) : Print the *fsst* version
+* [artifact](doc/artifact.MD) : Compile a single file FlureeDB schema from multiple sources.
+
+The following sub-commands can run without docker, but need a FlureeDB server to communicate with
+
+* [artifactdeploy](doc/artifactdeploy.MD) : 
+* [deploy](doc/deploy.MD)
+* [test](doc/deploy.MD) 
+
+If you have Docker installed, the following commands should also be available
+
+* [versioncheck](doc/versioncheck.MD) : Compare the version of the fsst tool on the host with the one on the guest docker for compatibility.
+* [dockerstart](doc/dockerstart.MD) : Start a FlureeDB version in a docker container.
+* [dockerstop](doc/dockerstop.MD) : Stop docker container running given FlureeDB version.
+* [dockerparams](doc/dockerparams.MD) : Retreive base info from a running docker container running a given FlureeDB version.
+* [dockerdeploy](doc/dockerdeploy.MD)
+* [dockertest](doc/dockertest.MD)
 
 ### Dependencies
 
@@ -19,8 +30,10 @@ Prior to using the *fsst* tool, use *pip install* to install all dependencies.
 Note that these dependencies should not be needed if you only intent to use the unit-test (using docker) or the docker temp instance of Fluree.
 
 ```bash
-python3 -m pip install base58 aioflureedb bitcoinlib
+python3 -m pip install base58 aioflureedb bitcoinlib docker
 ```
+
+It is important to note that as some dependencies are only needed for some subcommands, it is possible to run *fsst* without some of the dependencies installed, but doing so will disable several subcommands.
 
 ### Project directory structure.
 
@@ -124,125 +137,3 @@ This will get expanded to
 This one is mostly meant for tests. As JSON doesn't come with any possibility to add comments, we allow the key COMMENT
 to be added to operations. The *fsst* tool will strip out all ocurences of COMMENT keys in operations and queries.
 
-### Compile a FlureeDB schema from multiple sources
-When used in CICD, invoking fsst this way creates a single JSON file with an array of transactions for FlureeDB.
-```bash
-./fsst --dir demo-schema-parts --output fluree_artifact.json
-```
-If needed specify an alternate build target.
-```bash
-./fsst --dir demo-schema-parts --output fluree_artifact_other.json --target other
-```
-
-### Deploy a FlureeDB schema compiled from multiple sources.
-When used for local testing, it can be usefull to push the created schema directly to a FlureeDB host.
-
-```bash
-./fsst --dir demo-schema-parts --notest --host localhost --port 8090 --network testnet --createkey 4bb3d9f9f99281be4699859afdb39270083305414ae6506179a20e58c678f513
-```
-
-We need to specify some info about the local FlureeDB host. Note the *--test* option that specifies we don't want to run test scenarios. The *--network* option specifies the FlureeDB network string that together with the target (default in this case) ends up making up the database name. The --createkey option should specify the default instalation key of your local FlureeDB instance.
-
-### Run unit-tests on the different components of the FlureeDB schema.
-
-The third way to use *fsst* is as a unit test framework for the different test scenarios defined in the steps. To invoke *fsst* in this way, we call it like this:
-
-```bash
-./fsst --dir demo-schema-parts --host localhost --port 8090 --createkey 4bb3d9f9f99281be4699859afdb39270083305414ae6506179a20e58c678f513
-```
-
-What happens when we run the tool like this?
-
-Well, for every step in the selected build, *fsst* will do the following:
-
-1) Create a new database
-2) Fill the database with the expanded schema up untill the parts defined in that step
-3) For each of the tests defined for the step :
-    1) Read the user.json file as test transaction config
-    2) Run all transactions defined in prepare.json
-    3) Run all queries in yes.json, fail+abandon if any of the queries returns an empty array
-    4) Run all queries in no.json, fail+abandon if any of the queries returns a non-empty array.
-    5) Run all tyes transactions, fail+abandon if any of the transactions returns an error.
-    6) Run all tno transactions, fail+abandon if any of the transactions doesn't returnh an error.
-    7) Run all transactions in cleanup.json
-
-We should shortly discuss user.json and prepare.json. The file *user.json* looks something like this:
-
-```json
-{
-   "keys" : [
-      {
-         "account-id" : "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6",
-         "private" : "bb19048fbfc8f6a7f02b336048fa8e5aba1fb87f55893d40ff1ba375b90a8398"
-      }
-   ],
-   "no" : 0,
-   "yes" : 0,
-   "tno": 0,
-   "tyes": 0
-}
-```
-The JSON above tels *fsst* to run all transactions in tyes.json and tno.json and all queries in yes.json and no.json using the key at index zero of the keys array. It is possible to specify key usage more granular by using an array instead of an integer, to for example have two yes queries run with key zero and the next two with key one.
-
-It is important to note that *fsst* doesn't create *_auth* records for the keys in user.json automatically. This should be done in prepare.json in a transaction like this:
-
-```json
-[
-    {
-      "_id": "_auth",
-      "id": "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6",
-      "roles": [["_role/id","root"]]
-    }
-  ]
-```
-
-### Running tests with docker
-
-When used in a CICD pipeline, or when only used to test, if you have no further interest in the intermediate databases, running fsst in a docker container is likely the prefered way to run it.
-
-To run the test in a docker setting without installing FlureeDB on your development PC, run:
-
-```bash
-./fsst --dir demo-schema-parts --docker --tag 0.1.15.7
-```
-
-The result of this command will look something like this:
-
-```
-# waiting for default-private-key.txt to appear
-# waiting for default-private-key.txt to appear
-BUILDING default
-- Database: test8290/there-can-be-only-one
- - collecting transactions from build subdirs
-  - roles
-  - there_can_be_only_one
- - processing schema transaction sub-set
- - ok, completed 4 transactions on test8290/there-can-be-only-one
- - running test scenarios
-  - SCENARIO: test1
-   - prepare.json
-      - Ran 2  database  transactions
-   - yes.json
-      - Ran 0  database  queries
-   - no.json
-      - Ran 0  database  queries
-   - tyes.json
-      - Ran 1  database  transactions
-   - tno.json
-         - NOTICE: Expected error in NO transaction
-                  : 400 db/invalid-tx HeadOfState is already assigned to an Auth Value: 123145302311912
-      - Ran 1  database  transactions
-   - clean
-      - file not found, skipping: clean
-      - Ran 0  database  transactions
- - 1 tests completed
-```
-
-### Running a temp Fluree database in docker with the composite schema
-
-```bash
-./fsst --dir demo-schema-parts --docker --notest --tag 0.1.15.7
-```
-When you run fsst like this, the docker image won't be used to run any tests, but instead the FlureeDB will be initialized with the composite schema and a browser tab will get opened with the FlureeDB WUI.
-
- 
