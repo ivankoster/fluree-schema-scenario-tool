@@ -706,7 +706,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                                 if (verboseerrors and "_id" in operation and "id" in operation
                                         and operation["_id"].startswith("_rule")
                                         and "errorMessage" not in operation):
-                                    operation["errorMessage"] = "Verbose Errors: " + operation[""]
+                                    operation["errorMessage"] = "Verbose Errors: " + operation["id"]
                                 expanded2.append(operation)
                         else:
                             with open(main) as mainfile:
@@ -1103,7 +1103,7 @@ def runs_in_docker():
         if cnt < 3:
             return True
     except:
-        print("/proc/1/cgroup not found, assuming no trunning inside of docker.")
+        print("/proc/1/cgroup not found, assuming not running inside of docker.")
     return False
 
 async def argparse_main():
