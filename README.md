@@ -1,3 +1,7 @@
+# WARNING
+
+The below README is still for the 0.1 version of *fsst*, there have been major changes to fsst in the 0.2 version commandline interface. An updated README will be available shortly.
+
 ## Fluree Schema Scenario Tool
 
 This project contains a simple yet usefull tool for database schema development for FlureeDB.
