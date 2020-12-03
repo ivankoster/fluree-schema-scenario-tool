@@ -819,6 +819,21 @@ async def dockertest_main(directory, target, verboseerrors, network, tag, verbos
         cmd += " --linger"
     return run_in_docker(tag, cmd, directory, False, linger)
 
+async def dockerstart_main(tag):
+    imagename = "pibara/fsst:" + tag
+    command = "/bin/bash /usr/src/fsst/fluree_start.sh"
+    ports = dict()
+    ports["8080/tcp"] = 8090
+    client = docker.from_env()
+    try:
+        client.containers.run(imagename, command, ports=ports, detach=True)
+    except docker.errors.NotFound:
+        print("ERROR:", imagename, "not found")
+    return
+
+async def dockerstop_main(tag):
+    print("NOT YET IMPLEMENTED")
+
 async def versioncheck_main(tag):
     match = None
     lookfor = "pibara/fsst:" + tag
@@ -1155,7 +1170,7 @@ async def argparse_main():
             if runs_in_docker():
                 subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy", "guesttest", "guestdeploy","version"]
             else:
-                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy","dockerparams","artifactdeploy","version","versioncheck"]
+                subcommands = ["artifact", "test","deploy", "dockertest","dockerdeploy","dockerparams","artifactdeploy","version","versioncheck","dockerstart","dockerstop"]
         else:
             if runs_in_docker():
                 subcommands = ["artifact", "test","deploy","guesttest", "guestdeploy","version"]
@@ -1218,6 +1233,10 @@ async def argparse_main():
         return
     if args.subcommand == "versioncheck":
         return await versioncheck_main(args.tag)
+    if args.subcommand == "dockerstart":
+        return await dockerstart_main(args.tag)
+    if args.subcommand == "dockerstop":
+        return await dockerstop_main(args.tag)
     print("ERROR: impossible subcommand:", args.subcommand)
 
 LOOP = asyncio.get_event_loop()
