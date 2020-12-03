@@ -22,7 +22,7 @@ RUN apt-get update && \
     python3 -m pip install aioflureedb && \
     # Unzip the fluree zip file and remove the zip.
     cd /usr/src && \
-    unzip fluree-stable.zip -d fsst/ && \
+    unzip fluree-stable.zip && \
     rm fluree-stable.zip && \
     mv fluree-*/* fsst/ && \
     # Remove stuff we no longer need.
