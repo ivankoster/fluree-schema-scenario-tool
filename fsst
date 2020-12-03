@@ -697,6 +697,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                     print("- Database:", database)
                     print(" - collecting transactions from build subdirs")
                     # Run the test with transactions from all stages up to this one.
+                    print("Going through first", maxstage,"stages")
                     for subdir2 in build[:maxstage+1]:
                         print("  -", subdir2)
                         main = fluree_parts + "/" + subdir2 + "/main.json"
@@ -704,13 +705,16 @@ async def fluree_main(notest, network, host, port, output, createkey, createid, 
                         if os.path.isfile(noexpand):
                             with open(noexpand) as nefile:
                                 nelist = json.load(nefile)
-                            for operation in nelist:
-                                if (verboseerrors and "_id" in operation and "id" in operation
-                                        and operation["_id"].startswith("_rule")
-                                        and "errorMessage" not in operation):
-                                    print("Adding verbose error for", operation["id"])
-                                    operation["errorMessage"] = "Verbose Errors: " + operation["id"]
-                                expanded2.append(operation)
+                            for transaction in nelist:
+                                transaction_out = list()
+                                for operation in transaction:
+                                    if (verboseerrors and "_id" in operation and "id" in operation
+                                            and operation["_id"].startswith("_rule")
+                                            and "errorMessage" not in operation):
+                                        print("       + Adding verbose error for", operation["id"])
+                                        operation["errorMessage"] = "Verbose Errors: " + operation["id"]
+                                    transaction_out.append(operation)
+                                expanded2.append(transaction_out)
                         else:
                             with open(main) as mainfile:
                                 mainlist = json.load(mainfile)
