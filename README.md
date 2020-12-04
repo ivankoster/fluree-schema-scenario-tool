@@ -7,13 +7,13 @@ From the 0.2 version of *fsst*, the command line has a number of sub commands.
 The following sub-commands run without docker and without a local FlureeDB server.
 
 * [version](doc/version.MD) : Print the *fsst* version
-* [artifact](doc/artifact.MD) : Compile a single file FlureeDB schema from a [build target](buildtarget.MD).
+* [artifact](doc/artifact.MD) : Compile a single file FlureeDB schema from a [build target](doc/buildtarget.MD).
 
 The following sub-commands can run without docker, but need a FlureeDB server to communicate with
 
 * [artifactdeploy](doc/artifactdeploy.MD) : Create a FlureeDB database and deploy the transactions in the artifact file to it.
-* [deploy](doc/deploy.MD) : Compile FlureeDB schema from a [build target](buildtarget.MD) and deploy it to FlureeDB.
-* [test](doc/test.MD) : Run all unit tests for a [build target](buildtarget.MD)
+* [deploy](doc/deploy.MD) : Compile FlureeDB schema from a [build target](doc/buildtarget.MD) and deploy it to FlureeDB.
+* [test](doc/test.MD) : Run all unit tests for a [build target](doc/buildtarget.MD)
 
 If you have Docker installed, the following commands should also be available
 
