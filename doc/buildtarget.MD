@@ -25,25 +25,7 @@ Each build target specifies a list of build *steps*. In the example above, we ha
 
 Things are different for *step directories*. A step directory must contain a JSON file named *main.json*. This file can, just like the JSON file we just mentioned, just a list of as-is FlureeDB transactions, but the operations inside the transactions may also contain one or more of special *pre-processing fields*, that we will get to in the section *operation expansion*. 
 
-Next to the file *main.json*, a *step directory* may contain the file *test.json*. This file looks something like this:
-
-```json
-[
-  "test1"
-]
-```
-
-The file contains a simle JSON array of strings. Each string in the array designates a *test scenario* for the build step. Each test scenario directory could contain the following files:
-
-* user.json
-* prepare.json
-* yes.json
-* no.json
-* tyes.json
-* tno.json
-* cleanup.json
-
-The *user.json* and *prepare.json* files are mandatory. The other ones are optional. We'll discuss the content of these files in the *testing* section below.
+Next to the file *main.json*, a *step directory* may contain the file *test.json* for [unit testing](unittest.MD) the stage.
 
 ### Operation expansion
 
@@ -78,7 +60,9 @@ The above will be pre-processed by the *fsst* tool into the operation below:
 }
 ```
 It is important to note that in case of more than one parameter, the source operation should possibly use sorted JSON keys in order to avoid unexpected substitution. 
+
 #### The code\_expand key
+
 While not as problamatic to escape manually as the example above, it can be usefull to keep hand-written clojure in seperate clojure files.
 
 That means we can put the following in main.json:
@@ -104,6 +88,8 @@ This will get expanded to
 }
 ```
 #### The COMMENT key
+
 This one is mostly meant for tests. As JSON doesn't come with any possibility to add comments, we allow the key COMMENT
 to be added to operations. The *fsst* tool will strip out all ocurences of COMMENT keys in operations and queries.
+
 
