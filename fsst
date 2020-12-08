@@ -12,7 +12,7 @@ import time
 import hashlib
 import asyncio
 import itertools
-VERSION = "0.2.2"
+VERSION = "0.2.3"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -857,10 +857,11 @@ def run_in_docker(tag, command, directory, daemonize, expose):
         sys.exit(1)
     mount = docker.types.Mount("/usr/src/fsst/fluree_parts", workdir, read_only=True, type="bind")
     ports = dict()
+    name = "fsst-guestcommand-" + tag
     if expose or daemonize:
         ports["8080/tcp"] = 8090
     try:
-        container = client.containers.run(match, command, mounts=[mount], ports=ports, detach=True)
+        container = client.containers.run(match, command, mounts=[mount], ports=ports, detach=True, auto_remove=True, name=name)
     except docker.errors.APIError as exp:
         print("ERROR: Problem starting docker container OR issue binding to 8090")
         print(exp)
@@ -1007,8 +1008,9 @@ async def dockerstart_main(tag):
     ports = dict()
     ports["8080/tcp"] = 8090
     client = docker.from_env()
+    name = "fsst-dockerstart-" + tag
     try:
-        client.containers.run(imagename, command, ports=ports, detach=True)
+        client.containers.run(imagename, command, ports=ports, detach=True, auto_remove=True, name=name)
         print("Started", imagename)
     except docker.errors.NotFound:
         print("ERROR:", imagename, "not found")
@@ -1039,8 +1041,9 @@ async def versioncheck_main(tag):
         print("ERROR: ", lookfor, "docker image not found")
         sys.exit(0)
     cmd = "./fsst version"
+    name = "fsst-versioncheck-" + tag
     try:
-        container = client.containers.run(match, cmd, detach=False)
+        container = client.containers.run(match, cmd, detach=False, auto_remove=True, name=name)
     except docker.errors.ContainerError:
         print("ERROR: Container Error.")
         print("       This might be the result of a 0.1.x version of the docker container")
