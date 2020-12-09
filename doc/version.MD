@@ -5,7 +5,7 @@ The docker related sub-commands [dockertest](dockertest.MD) and [dockerdeploy](d
 
 The *version* subcommand only displays the version of the invoked fsst tool. To compare versions, use the [versioncheck](versioncheck.MD) command instead.
 
-For use in a CICD setup, it is suggested to always include an invokation of this subcommand for debugging purposes.
+For use in a [CICD](gitlabci.MD) setup, it is suggested to always include an invokation of this subcommand for debugging purposes.
 
 ```bash
 ./ffst version

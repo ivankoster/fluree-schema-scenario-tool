@@ -51,3 +51,7 @@ docker pull pibara/fsst:stable
 docker pull pibara/fsst:beta
 docker pull pibara/fsst:alpha
 ```
+
+### Gitlab CICD
+
+For usage in a gitlab CICD pipeline, chack out [this page](doc/gitlabci.MD)
