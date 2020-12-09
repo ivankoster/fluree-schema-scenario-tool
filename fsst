@@ -12,7 +12,7 @@ import time
 import hashlib
 import asyncio
 import itertools
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1369,7 +1369,7 @@ async def argparse_main():
                 sa_help = helps[subarg]
                 if subarg in defaults:
                     sa_default = defaults[subarg]
-                    if not sa_default:
+                    if not sa_default is None and not sa_default:
                         parsers[subcommand].add_argument('--' + subarg,
                                                          action='store_true',
                                                          help=sa_help)
