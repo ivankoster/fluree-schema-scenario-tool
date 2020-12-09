@@ -793,6 +793,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
             # If no output but notest specified, fill the database with the expanded tranactions
             # list.
             database = network + "/" + target
+            database = "-".join(database.lower().split("_"))
             await filldb(host, port, database, createkey, createid, expanded)
             print("Deployed", fluree_parts, "target", target, "to", database, "on", host)
         elif testcount == 0:
