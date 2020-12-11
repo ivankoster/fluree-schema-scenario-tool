@@ -61,7 +61,7 @@ class FlushFile(object):
         return ret
 
     def flush(self):
-        return self.fd.flush
+        return self.fd.flush()
 
     def close(self):
         return self.fd.close()
