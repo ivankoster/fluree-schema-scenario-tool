@@ -44,6 +44,35 @@ except ModuleNotFoundError:
     print("         - docker related commands disabled.")
     DOCKER_OK = False
 
+
+class FlushFile(object):
+    """Helper class for file like objects to always flush on write"""
+    def __init__(self, fd):
+        self.fd = fd
+
+    def write(self, x):
+        ret = self.fd.write(x)
+        self.fd.flush()
+        return ret
+
+    def writelines(self, lines):
+        ret = self.writelines(lines)
+        self.fd.flush()
+        return ret
+
+    def flush(self):
+        return self.fd.flush
+
+    def close(self):
+        return self.fd.close()
+
+    def fileno(self):
+        return self.fd.fileno()
+
+
+sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in linux docker on a windows host
+
+
 def key_to_id(privkey):
     """Convert a private key string into a fluree account id.
 
@@ -750,7 +779,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         "name" : "lastBlock",
         "doc" : "Get the number of the last known block on the ledger",
         "code_from_query": {
-           "select": "?maxBlock", 
+           "select": "?maxBlock",
            "where": [
                ["?s", "_block/number", "?bNum"],
                ["?maxBlock",  "#(max ?bNum)"],
@@ -951,6 +980,7 @@ def run_in_docker(tag, command, directory, daemonize, expose):
                 print(sline, flush=True)
             if sline == "LINGER == True" and browser_triggered is False:
                 webbrowser.open("http://localhost:8090/")
+                browser_triggered = True
                 if daemonize:
                     runcmd.close()
                     break
